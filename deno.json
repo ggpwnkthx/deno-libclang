@@ -1,6 +1,6 @@
 {
   "name": "@ggpwnkthx/libclang",
-  "export": "./mod.ts",
+  "exports": "./mod.ts",
   "version": "1.0.0",
   "lock": false,
   "imports": {
