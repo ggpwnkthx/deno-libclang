@@ -1,0 +1,12 @@
+{
+  "name": "@ggpwnkthx/libclang",
+  "export": "./mod.ts",
+  "version": "1.0.0",
+  "lock": false,
+  "imports": {
+    "@std/assert": "jsr:@std/assert@1"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}

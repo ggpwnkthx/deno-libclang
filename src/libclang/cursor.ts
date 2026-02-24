@@ -1,0 +1,318 @@
+/**
+ * Cursor functions
+ */
+
+import {
+  CXChildVisitResult,
+  CXCursor,
+  CXCursorKind,
+  SourceLocation,
+  SourceRange,
+} from "../ffi/types.ts";
+import {
+  addCollectedCursorBuffer,
+  clearCollectedCursors,
+  getCollectedCursorBuffers,
+  getVisitor,
+  setVisitor,
+} from "../ffi/state.ts";
+import { getSymbols } from "./library.ts";
+import { parseSourceLocation, parseSourceRange } from "./helpers.ts";
+import { NativeCXCursor } from "./native_cursor.ts";
+
+/**
+ * Get the kind of a cursor
+ */
+export function getCursorKind(cursor: CXCursor): CXCursorKind {
+  const sym = getSymbols();
+  return sym.clang_getCursorKind(cursor) as CXCursorKind;
+}
+
+/**
+ * Get the spelling of a cursor
+ */
+export function getCursorSpelling(cursor: CXCursor): string {
+  const sym = getSymbols();
+  const cxString = sym.clang_getCursorSpelling(cursor);
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
+
+/**
+ * Get the spelling of a cursor from its buffer
+ *
+ * This function works with the raw cursor buffers returned by visitChildren,
+ * avoiding the need to construct a CXCursor object.
+ */
+export function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
+  const sym = getSymbols();
+  // Pass the buffer directly as the CXCursor struct - use type assertion
+  const cxString = sym.clang_getCursorSpelling(
+    buffer as unknown as CXCursor,
+  );
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
+
+/**
+ * Get the display name of a cursor
+ */
+export function getCursorDisplayName(cursor: CXCursor): string {
+  const sym = getSymbols();
+  const cxString = sym.clang_getCursorDisplayName(cursor);
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
+
+/**
+ * Get the location of a cursor
+ */
+export function getCursorLocation(cursor: CXCursor): SourceLocation {
+  const sym = getSymbols();
+  const location = sym.clang_getCursorLocation(cursor);
+  return parseSourceLocation(location);
+}
+
+/**
+ * Get the extent of a cursor
+ */
+export function getCursorExtent(cursor: CXCursor): SourceRange {
+  const sym = getSymbols();
+  const range = sym.clang_getCursorExtent(cursor);
+  return parseSourceRange(range);
+}
+
+/**
+ * Visit all children of a cursor
+ *
+ * @param cursor - The parent cursor (CXCursor or buffer)
+ * @param visitor - Callback function for each child
+ * @returns Array of child cursor buffers (Uint8Array) that can be passed to FFI functions
+ */
+export function visitChildren(
+  cursor: CXCursor | Uint8Array,
+  visitor: (cursor: CXCursor, parent: CXCursor) => CXChildVisitResult,
+): Uint8Array[] {
+  const sym = getSymbols();
+
+  // Convert CXCursor to buffer if needed
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+
+  // Set the visitor function in global state
+  setVisitor(visitor);
+
+  // Create the native callback
+  const visitorPtr = createVisitorCallback();
+
+  sym.clang_visitChildren(
+    cursorArg,
+    visitorPtr,
+    null as unknown as Deno.PointerValue,
+  );
+
+  // Clean up the callback to prevent memory leak
+  if (
+    currentCallback && typeof currentCallback === "object" &&
+    "close" in currentCallback
+  ) {
+    (currentCallback as { close: () => void }).close();
+    currentCallback = null;
+  }
+
+  // Get collected cursor buffers and clean up
+  const buffers = getCollectedCursorBuffers();
+  clearCollectedCursors();
+  setVisitor(null);
+
+  // Return the raw buffers - these can be passed to FFI functions like getCursorType
+  return buffers;
+}
+
+// Store callback globally to prevent garbage collection during visitChildren
+let currentCallback: unknown = null;
+
+function createVisitorCallback(): Deno.PointerValue {
+  // Close previous callback if exists
+  if (
+    currentCallback && typeof currentCallback === "object" &&
+    "close" in currentCallback
+  ) {
+    (currentCallback as { close: () => void }).close();
+    currentCallback = null;
+  }
+
+  const callback = new Deno.UnsafeCallback(
+    {
+      parameters: [
+        { struct: ["u32", "i32", "pointer", "pointer", "pointer"] },
+        { struct: ["u32", "i32", "pointer", "pointer", "pointer"] },
+        "pointer",
+      ],
+      result: "i32",
+    },
+    (
+      cursorStruct: Uint8Array,
+      _parentStruct: Uint8Array,
+      _clientData: Deno.PointerValue,
+    ): number => {
+      // Parse CXCursor from the struct buffer
+      const view = new DataView(
+        cursorStruct.buffer,
+        cursorStruct.byteOffset,
+        cursorStruct.byteLength,
+      );
+      const kind = view.getUint32(0, true);
+      const xdata = view.getInt32(4, true);
+      const data0 = view.getBigUint64(8, true);
+      const data1 = view.getBigUint64(16, true);
+      const data2 = view.getBigUint64(24, true);
+
+      // Create a native buffer that can be passed to FFI functions
+      const nativeCursor = new NativeCXCursor(
+        kind,
+        xdata,
+        data0,
+        data1,
+        data2,
+      );
+      const cursorBuffer = nativeCursor.getBuffer();
+
+      // Get the CXCursor object for the visitor callback
+      const cursor = nativeCursor.toCXCursor();
+
+      // Get the parent cursor (not readily available from this callback signature)
+      // We'll pass a null parent for now
+      const parent: CXCursor = {
+        kind: 0,
+        xdata: 0,
+        data: [
+          null as unknown as Deno.PointerValue,
+          null as unknown as Deno.PointerValue,
+          null as unknown as Deno.PointerValue,
+        ],
+      };
+
+      // Call the JS visitor function from global state
+      const visitor = getVisitor();
+      if (visitor) {
+        const result = visitor(cursor, parent);
+
+        // Collect the native buffer for later retrieval (can be passed to FFI)
+        addCollectedCursorBuffer(cursorBuffer);
+
+        // Return the result - Deno FFI inverts the return value for callback functions
+        // returning i32. When the visitor returns 0 (Continue), it should continue
+        // traversing, but Deno FFI inverts this. Inverting it back fixes the issue.
+        const returnValue = result === 0 ? 1 : 0;
+        return returnValue;
+      }
+
+      // If no visitor, return Continue
+      return CXChildVisitResult.Continue;
+    },
+  );
+
+  // Store callback globally for cleanup
+  currentCallback = callback;
+
+  // Return just the pointer
+  return callback.pointer;
+}
+
+/**
+ * Get the kind name for a cursor kind
+ */
+export function getCursorKindSpelling(kind: CXCursorKind): string {
+  const sym = getSymbols();
+  const cxString = sym.clang_getCursorKindSpelling(kind as number);
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
+
+/**
+ * Get the availability of a cursor
+ */
+export function getCursorAvailability(cursor: CXCursor): number {
+  const sym = getSymbols();
+  return sym.clang_getCursorAvailability(cursor);
+}
+
+/**
+ * Get the cursor that a cursor refers to
+ */
+export function getCursorReferenced(cursor: CXCursor): CXCursor {
+  const sym = getSymbols();
+  return sym.clang_getCursorReferenced(cursor);
+}
+
+/**
+ * Get the definition of a cursor
+ */
+export function getCursorDefinition(cursor: CXCursor): CXCursor {
+  const sym = getSymbols();
+  return sym.clang_getCursorDefinition(cursor);
+}
+
+/**
+ * Get the signed integer value of an enum constant declaration
+ *
+ * @param cursor - CXCursor for an EnumConstantDecl, or Uint8Array buffer
+ * @returns The enum constant value as a bigint
+ */
+export function getEnumConstantDeclValue(
+  cursor: CXCursor | Uint8Array,
+): bigint {
+  const sym = getSymbols();
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  return sym.clang_getEnumConstantDeclValue(cursorArg);
+}
+
+/**
+ * Get the unsigned integer value of an enum constant declaration
+ *
+ * @param cursor - CXCursor for an EnumConstantDecl, or Uint8Array buffer
+ * @returns The enum constant value as a bigint
+ */
+export function getEnumConstantDeclUnsignedValue(
+  cursor: CXCursor | Uint8Array,
+): bigint {
+  const sym = getSymbols();
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  return sym.clang_getEnumConstantDeclUnsignedValue(cursorArg);
+}
+
+/**
+ * Get the Unified Symbol Resolution (USR) for a cursor
+ *
+ * USRs are unique identifiers for symbols that can be used to deduplicate
+ * types across the AST. For structs, unions, functions, etc., the USR
+ * provides a stable identifier.
+ *
+ * @param cursor - CXCursor or Uint8Array buffer
+ * @returns The USR string for the cursor
+ */
+export function getCursorUSR(cursor: CXCursor | Uint8Array): string {
+  const sym = getSymbols();
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  const cxString = sym.clang_getCursorUSR(cursorArg);
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
