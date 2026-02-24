@@ -5,6 +5,7 @@
  */
 
 export * from "./src/libclang.ts";
+export * from "./src/ffi/gen.ts";
 export * from "./src/ffi/types.ts";
 export * from "./src/utils/ffi.ts";
 export * from "./src/utils/platform.ts";
