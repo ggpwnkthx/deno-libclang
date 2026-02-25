@@ -2,7 +2,7 @@
  * Diagnostic functions
  */
 
-import {
+import type {
   CXDiagnostic,
   CXDiagnosticSeverity,
   CXTranslationUnit,

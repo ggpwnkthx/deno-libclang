@@ -2,7 +2,7 @@
  * Index functions
  */
 
-import { CXIndex } from "../ffi/types.ts";
+import type { CXIndex } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 
 /**

@@ -2,7 +2,7 @@
  * Helper functions
  */
 
-import {
+import type {
   CXSourceLocation,
   CXSourceRange,
   SourceLocation,

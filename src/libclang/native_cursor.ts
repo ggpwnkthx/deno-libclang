@@ -5,7 +5,7 @@
  * Total size: 4 + 4 + 24 = 32 bytes (but we use 40 for alignment)
  */
 
-import { CXCursor, NativePointer } from "../ffi/types.ts";
+import type { CXCursor, NativePointer } from "../ffi/types.ts";
 
 /**
  * Native buffer-based CXCursor that can be passed to FFI functions

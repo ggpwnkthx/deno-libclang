@@ -2,7 +2,12 @@
  * Type functions
  */
 
-import { CXCursor, CXType, CXTypeKind, NativePointer } from "../ffi/types.ts";
+import type {
+  CXCursor,
+  CXType,
+  CXTypeKind,
+  NativePointer,
+} from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 
 /**

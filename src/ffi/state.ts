@@ -4,7 +4,7 @@
  * Manages state for the clang_visitChildren callback system
  */
 
-import { CursorVisitor, CXCursor } from "./types.ts";
+import type { CursorVisitor, CXCursor } from "./types.ts";
 
 // Global state to store visitor function and collected cursor buffers
 let currentVisitor: CursorVisitor | null = null;

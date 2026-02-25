@@ -7,6 +7,9 @@
 // Pointer size is always 8 bytes on 64-bit systems
 const POINTER_SIZE = 8;
 
+// Reusable TextEncoder instance (stateless and safe to reuse)
+const encoder = new TextEncoder();
+
 /**
  * Create a pointer buffer for passing/receiving pointers
  */
@@ -40,7 +43,6 @@ export function ptrToCString(ptr: Deno.PointerValue): string {
  * Convert a JavaScript string to a C string pointer
  */
 export function cstringToPtr(str: string): Deno.PointerValue {
-  const encoder = new TextEncoder();
   const data = encoder.encode(str + "\0");
   const buffer = new Uint8Array(data);
   return Deno.UnsafePointer.of(buffer);

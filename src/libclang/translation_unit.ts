@@ -3,11 +3,11 @@
  */
 
 import {
-  CXIndex,
-  CXTranslationUnit,
+  type CXIndex,
+  type CXTranslationUnit,
   CXTranslationUnit_Flags,
-  NativePointer,
-  ParseResult,
+  type NativePointer,
+  type ParseResult,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 

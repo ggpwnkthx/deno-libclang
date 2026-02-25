@@ -2,7 +2,7 @@
  * File and Location functions
  */
 
-import {
+import type {
   CXFile,
   CXSourceLocation,
   CXTranslationUnit,

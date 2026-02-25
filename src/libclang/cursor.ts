@@ -4,10 +4,10 @@
 
 import {
   CXChildVisitResult,
-  CXCursor,
-  CXCursorKind,
-  SourceLocation,
-  SourceRange,
+  type CXCursor,
+  type CXCursorKind,
+  type SourceLocation,
+  type SourceRange,
 } from "../ffi/types.ts";
 import {
   addCollectedCursorBuffer,
