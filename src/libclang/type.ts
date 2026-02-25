@@ -11,6 +11,53 @@ import type {
 import { getSymbols } from "./library.ts";
 
 /**
+ * Convert CXType to a buffer for passing to FFI functions
+ *
+ * This is used when calling libclang functions that expect a CXType parameter,
+ * as Deno FFI requires passing the struct as raw bytes when the function returns
+ * a struct (which CXType does).
+ *
+ * @param type - The CXType to convert
+ * @returns A Uint8Array buffer that can be passed to FFI functions
+ */
+export function cxTypeToBuffer(type: CXType): Uint8Array {
+  const view = new DataView(new ArrayBuffer(24));
+  view.setUint32(0, type.kind, true);
+  view.setUint32(4, type.reserved, true);
+  view.setBigUint64(8, type.data0 as unknown as bigint, true);
+  view.setBigUint64(16, type.data1 as unknown as bigint, true);
+  return new Uint8Array(view.buffer);
+}
+
+/**
+ * Parse CXType from a buffer returned by FFI
+ *
+ * Deno FFI returns Uint8Array for struct returns - parse it manually.
+ *
+ * @param buffer - The Uint8Array buffer returned by FFI
+ * @returns A parsed CXType object
+ */
+export function parseCXTypeFromBuffer(buffer: Uint8Array): CXType {
+  const view = new DataView(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength,
+  );
+  // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
+  const kind = view.getUint32(0, true);
+  const reserved = view.getUint32(4, true);
+  const data0 = view.getBigUint64(8, true);
+  const data1 = view.getBigUint64(16, true);
+
+  return {
+    kind,
+    reserved,
+    data0: data0 as unknown as NativePointer,
+    data1: data1 as unknown as NativePointer,
+  };
+}
+
+/**
  * Get the type of a cursor
  *
  * @param cursor - CXCursor (from TU) or Uint8Array buffer (from visitChildren)
@@ -28,23 +75,7 @@ export function getCursorType(cursor: CXCursor | Uint8Array): CXType {
 
   // Deno FFI returns Uint8Array for struct returns - parse it manually
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-    const kind = view.getUint32(0, true);
-    const reserved = view.getUint32(4, true);
-    const data0 = view.getBigUint64(8, true);
-    const data1 = view.getBigUint64(16, true);
-
-    return {
-      kind,
-      reserved,
-      data0: data0 as unknown as NativePointer,
-      data1: data1 as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;
@@ -72,23 +103,7 @@ export function getTypedefUnderlyingType(
 
   // Deno FFI returns Uint8Array for struct returns - parse it manually
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-    const kind = view.getUint32(0, true);
-    const reserved = view.getUint32(4, true);
-    const data0 = view.getBigUint64(8, true);
-    const data1 = view.getBigUint64(16, true);
-
-    return {
-      kind,
-      reserved,
-      data0: data0 as unknown as NativePointer,
-      data1: data1 as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;
@@ -106,41 +121,13 @@ export function getValueType(type: CXType | Uint8Array): CXType {
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    // Convert CXType to buffer
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   const result = sym.clang_Type_getValueType(typeBuffer as unknown as CXType);
 
   // Deno FFI returns Uint8Array for struct returns - parse it manually
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-    const kind = view.getUint32(0, true);
-    const reserved = view.getUint32(4, true);
-    const data0 = view.getBigUint64(8, true);
-    const data1 = view.getBigUint64(16, true);
-
-    return {
-      kind,
-      reserved,
-      data0: data0 as unknown as NativePointer,
-      data1: data1 as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;
@@ -169,19 +156,7 @@ export function getTypeSpelling(type: CXType | Uint8Array): string {
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    // Convert CXType to buffer
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   const cxString = sym.clang_getTypeSpelling(typeBuffer as unknown as CXType);
   const cStr = sym.clang_getCString(cxString);
@@ -200,18 +175,7 @@ export function getNumArgTypes(type: CXType | Uint8Array): number {
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   return sym.clang_getNumArgTypes(typeBuffer as unknown as CXType);
 }
@@ -230,18 +194,7 @@ export function getArgType(
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   const result = sym.clang_getArgType(
     typeBuffer as unknown as CXType,
@@ -250,17 +203,7 @@ export function getArgType(
 
   // Parse CXType from result
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    return {
-      kind: view.getUint32(0, true),
-      reserved: view.getUint32(4, true),
-      data0: view.getBigUint64(8, true) as unknown as NativePointer,
-      data1: view.getBigUint64(16, true) as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;
@@ -278,41 +221,13 @@ export function getResultType(type: CXType | Uint8Array): CXType {
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    // Convert CXType to buffer
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   const result = sym.clang_getResultType(typeBuffer as unknown as CXType);
 
   // Deno FFI returns Uint8Array for struct returns - parse it manually
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-    const kind = view.getUint32(0, true);
-    const reserved = view.getUint32(4, true);
-    const data0 = view.getBigUint64(8, true);
-    const data1 = view.getBigUint64(16, true);
-
-    return {
-      kind,
-      reserved,
-      data0: data0 as unknown as NativePointer,
-      data1: data1 as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;
@@ -330,41 +245,13 @@ export function getPointeeType(type: CXType | Uint8Array): CXType {
   const sym = getSymbols();
 
   // Convert CXType to buffer if needed
-  let typeBuffer: Uint8Array;
-
-  if (type instanceof Uint8Array) {
-    typeBuffer = type;
-  } else {
-    // Convert CXType to buffer
-    const view = new DataView(new ArrayBuffer(24));
-    view.setUint32(0, type.kind, true);
-    view.setUint32(4, type.reserved, true);
-    view.setBigUint64(8, type.data0 as unknown as bigint, true);
-    view.setBigUint64(16, type.data1 as unknown as bigint, true);
-    typeBuffer = new Uint8Array(view.buffer);
-  }
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
 
   const result = sym.clang_getPointeeType(typeBuffer as unknown as CXType);
 
   // Deno FFI returns Uint8Array for struct returns - parse it manually
   if (result instanceof Uint8Array) {
-    const view = new DataView(
-      result.buffer,
-      result.byteOffset,
-      result.byteLength,
-    );
-    // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-    const kind = view.getUint32(0, true);
-    const reserved = view.getUint32(4, true);
-    const data0 = view.getBigUint64(8, true);
-    const data1 = view.getBigUint64(16, true);
-
-    return {
-      kind,
-      reserved,
-      data0: data0 as unknown as NativePointer,
-      data1: data1 as unknown as NativePointer,
-    };
+    return parseCXTypeFromBuffer(result);
   }
 
   return result;

@@ -12,6 +12,15 @@ let libclang: unknown = null;
 let symbols: LibclangSymbols | null = null;
 
 /**
+ * Check if libclang is currently loaded
+ *
+ * @returns true if libclang is loaded, false otherwise
+ */
+export function isLoaded(): boolean {
+  return symbols !== null;
+}
+
+/**
  * Load libclang library
  */
 function loadLibclang(libPath: string | undefined): void {
@@ -25,7 +34,12 @@ function loadLibclang(libPath: string | undefined): void {
     // @ts-ignore - symbols access - use any to bypass strict type checking for FFI
     symbols = libclang.symbols as unknown as LibclangSymbols;
   } catch (e) {
-    throw new Error(`Failed to load libclang from ${actualPath}: ${e}`);
+    // Preserve original error message and stack for better debugging
+    const originalError = e instanceof Error ? e : new Error(String(e));
+    throw new Error(
+      `Failed to load libclang from ${actualPath}: ${originalError.message}`,
+      { cause: originalError },
+    );
   }
 }
 
@@ -34,14 +48,17 @@ function loadLibclang(libPath: string | undefined): void {
  *
  * Closes the dynamic library handle and clears all loaded symbols.
  * After calling this, any further FFI calls will fail until load() is called again.
+ *
+ * @returns true
  */
-export function unload(): void {
+export function unload(): boolean {
   if (libclang !== null) {
     // @ts-ignore - Deno.dlopen signature
     libclang.close();
     libclang = null;
     symbols = null;
   }
+  return true;
 }
 
 /**
@@ -52,7 +69,7 @@ export function unload(): void {
  */
 export function getSymbols(): LibclangSymbols {
   if (!symbols) {
-    throw new Error("libclang not loaded. Call loadLibclang() first.");
+    throw new Error("libclang not loaded. Call load() first.");
   }
   return symbols;
 }
@@ -64,5 +81,11 @@ export function getSymbols(): LibclangSymbols {
  * @throws Error if libclang cannot be loaded from the specified path
  */
 export function load(libPath?: string): void {
+  // If library is already loaded, just return (idempotent)
+  if (symbols !== null) {
+    return;
+  }
+
+  // Library is not loaded, load it
   loadLibclang(libPath);
 }

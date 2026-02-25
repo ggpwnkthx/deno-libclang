@@ -70,7 +70,7 @@ export interface FunctionInfo {
 /**
  * FFI type representation - either a primitive type or a struct type
  */
-export type FFIType = string | { struct: string[] };
+export type FFIType = string | { struct: string[] } | { namedStruct: string };
 
 /**
  * Collected data from parsing a header file
@@ -221,8 +221,10 @@ function lowerTypeToFFI(
       return "pointer";
     }
     case CXTypeKind.Record: {
-      // This is a struct type - we need to look it up
-      return "pointer"; // For now, pass by reference
+      // Get struct name from type spelling (e.g., "struct Point", "union Foo")
+      const typeSpelling = getTypeSpelling(type);
+      // Return named struct info - still pass by reference but with type info
+      return { namedStruct: typeSpelling };
     }
     case CXTypeKind.Auto: {
       // Auto types - try to resolve using getValueType or getTypeSpelling
@@ -373,9 +375,12 @@ function lowerTypeToFFI(
 }
 
 function is64BitPlatform(): boolean {
-  // Simple check - in Deno, we can check the pointer size
-  // For now, assume 64-bit on most platforms
-  return true;
+  // Check pointer size - 8 bytes means 64-bit
+  // Deno.build.pointerSize is available in newer Deno versions
+  // We can also check arch to determine pointer size
+  const arch = Deno.build.arch;
+  // x86_64, aarch64, arm64 are 64-bit architectures
+  return arch === "x86_64" || arch === "aarch64" || arch === "arm64";
 }
 
 /**

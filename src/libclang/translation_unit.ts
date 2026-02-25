@@ -156,6 +156,21 @@ export function parseTranslationUnit(
   args: string[] = [],
   unsavedFiles: CXUnsavedFile[] = [],
 ): ParseResult {
+  // Validate inputs
+  if (!index) {
+    return {
+      translationUnit: null,
+      error: "Invalid index: CXIndex is null or undefined",
+    };
+  }
+
+  if (!sourceFile || typeof sourceFile !== "string") {
+    return {
+      translationUnit: null,
+      error: "Invalid sourceFile: must be a non-empty string",
+    };
+  }
+
   const sym = getSymbols();
 
   // Convert sourceFile to a C-string pointer using native memory
@@ -183,14 +198,20 @@ export function parseTranslationUnit(
     CXTranslationUnit_Flags.None,
   );
 
+  // Build keepAlive array with all buffers that need to stay alive
+  const _keepAlive: Uint8Array[] = [sourceFileBuffer];
+  _keepAlive.push(...argsResult._keepAlive);
+  _keepAlive.push(...unsavedFilesResult._keepAlive);
+
   if (!result) {
     return {
       translationUnit: null,
       error: "Failed to parse translation unit",
+      _keepAlive,
     };
   }
 
-  return { translationUnit: result };
+  return { translationUnit: result, _keepAlive };
 }
 
 /**

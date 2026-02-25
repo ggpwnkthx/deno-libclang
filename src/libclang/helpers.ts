@@ -37,6 +37,9 @@ export function parseSourceLocation(
     }
   }
 
+  // Note: libclang does not provide a direct API to get character offset from source location.
+  // The offset would need to be computed from the file content using line/column.
+  // For now, we set offset to 0 as a placeholder - users can compute it manually if needed.
   const offset = 0;
 
   // Get the file name from the file pointer

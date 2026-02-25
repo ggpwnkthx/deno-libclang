@@ -66,10 +66,77 @@ disposeIndex(index);
 | `getDiagnostics`               | Get compiler diagnostics/errors/warnings     |
 | `getFile` / `getLocation`      | Handle source files and locations            |
 
+## Memory Management
+
+This library uses manual memory management via FFI. You **must** dispose of
+resources to prevent memory leaks:
+
+```typescript
+// Always dispose resources when done
+disposeTranslationUnit(translationUnit);
+disposeIndex(index);
+
+// If you want to unload libclang entirely
+unload();
+```
+
+The `parseTranslationUnit` function returns a `_keepAlive` field in the result
+that contains native memory buffers. Keep this array in scope for the lifetime
+of the translation unit:
+
+```typescript
+const result = parseTranslationUnit(index, "file.c");
+if (result.translationUnit) {
+  // result._keepAlive must remain in scope while using the translation unit
+  // You can store it alongside your unit
+  const unit = result.translationUnit;
+  const keepAlive = result._keepAlive;
+
+  // Use the unit...
+  visitChildren(unit, (cursor) => {/* ... */});
+
+  // Dispose when done
+  disposeTranslationUnit(unit);
+  // keepAlive can now go out of scope
+}
+```
+
+## Error Handling
+
+Functions may throw or return errors for invalid inputs:
+
+```typescript
+// parseTranslationUnit returns error info in result
+const result = parseTranslationUnit(index, "nonexistent.c");
+if (result.error) {
+  console.error("Parse failed:", result.error);
+}
+
+// Invalid inputs return results with error messages
+const invalidResult = parseTranslationUnit(null, "");
+// invalidResult.error will be "Invalid index: CXIndex is null or undefined"
+```
+
+## Thread Safety
+
+**Note:** libclang is not thread-safe. Do not share translation units, cursors,
+or other libclang objects across threads. Each thread should create its own
+index and translation units.
+
 ## Running Tests
 
 ```bash
-deno test -A
+deno test --allow-all
+```
+
+## Code Quality
+
+```bash
+# Lint code
+deno lint
+
+# Format code
+deno fmt
 ```
 
 ## License

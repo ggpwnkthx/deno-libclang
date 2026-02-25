@@ -127,15 +127,58 @@ export enum CXCursorKind {
   ObjCClassMethodDecl = 18,
   ObjCImplementationDecl = 19,
   ObjCCategoryImplDecl = 20,
-  TranslationUnit = 350,
-  TypeRef = 30,
-  TypoExpr = 33,
-  CXXBaseSpecifier = 40,
-  TemplateTypeParameter = 44,
-  CXXAccessSpecifier = 47,
-  OverloadDecl = 63,
-  CompoundStmt = 100,
-  LabelStmt = 109,
+  // C++ declarations
+  NamespaceDecl = 22,
+  NamespaceAliasDecl = 23,
+  UsingDirectiveDecl = 24,
+  UsingDeclaration = 25,
+  CXXConstructor = 34,
+  CXXDestructor = 35,
+  CXXMethod = 36,
+  CXXOperatorCallExpr = 47,
+  CXXMemberCallExpr = 48,
+  // Note: CXXCallExpr alias handled below
+  CXXNewExpr = 53,
+  CXXDeleteExpr = 54,
+  CXXThisExpr = 55,
+  CXXNullPtrLiteralExpr = 56,
+  CXXBoolLiteralExpr = 57,
+  CXXStdInitializerListExpr = 58,
+  CXXCatchStmt = 65,
+  CXXTryStmt = 66,
+  CXXThrowExpr = 67,
+  CXXTryOrCatchStmt = 66,
+  CXXTypeRefExpr = 200,
+  TemplateRef = 41,
+  NamespaceAliasRef = 42,
+  MemberRef = 48,
+  // MemberRefExpr is at 126
+  LabelRef = 43,
+  OverloadedDeclRef = 45,
+  VariableRef = 46,
+  // Template declarations
+  TemplateTemplateParameter = 39,
+  TemplateDecl = 41,
+  NonTypeTemplateParameter = 43,
+  // Other declarations
+  LinkageSpec = 37,
+  ExportDecl = 38,
+  FileScopeAssmt = 60,
+  StaticAssertDecl = 61,
+  Attr = 62,
+  // Expressions
+  ThisExpr = 55,
+  ExpressionStmt = 60,
+  FloatingLiteral = 61,
+  ImagLiteral = 62,
+  PredefinedExpr = 63,
+  // Statements
+  AsmStmt = 64,
+  SehTryStmt = 66,
+  SehExceptStmt = 67,
+  SehFinallyStmt = 68,
+  MsAsmStmt = 69,
+  NullStmt = 70,
   DeclStmt = 110,
   DoStmt = 111,
   ForStmt = 113,
@@ -148,10 +191,13 @@ export enum CXCursorKind {
   ContinueStmt = 125,
   DefaultStmt = 127,
   CaseStmt = 128,
+  AttributedStmt = 131,
+  // Operators
   BinaryOperator = 106,
   UnaryOperator = 107,
   ConditionalOperator = 108,
   CompoundAssignOperator = 112,
+  // Expressions (continued)
   CallExpr = 114,
   IntegerLiteral = 115,
   StringLiteral = 116,
@@ -167,6 +213,16 @@ export enum CXCursorKind {
   UnaryExpr = 135,
   SizeOfExpr = 137,
   VAArgExpr = 138,
+  // References
+  TypeRef = 30,
+  TypoExpr = 33,
+  CXXBaseSpecifier = 40,
+  TemplateTypeParameter = 44,
+  CXXAccessSpecifier = 47,
+  OverloadDecl = 63,
+  // Misc
+  CompoundStmt = 100,
+  LabelStmt = 109,
   TypeRefExpr = 200,
   RefExpr = 202,
   OpaqueValueExpr = 210,
@@ -174,6 +230,9 @@ export enum CXCursorKind {
   NoDeclFound = 301,
   NotImplemented = 302,
   InvalidCode = 400,
+  // Aliases for compatibility
+  TranslationUnit = 350,
+  SehLeaveStmt = 70,
 }
 
 // ============================================================================
@@ -411,6 +470,13 @@ export interface ParseResult {
   translationUnit: CXTranslationUnit | null;
   /** Error message if parsing failed */
   error?: string;
+  /**
+   * Buffers that must be kept alive to maintain valid pointers.
+   * These buffers contain the native memory for command-line arguments
+   * and unsaved file contents. Keep these in scope for the lifetime
+   * of the translation unit.
+   */
+  _keepAlive?: Uint8Array[];
 }
 
 // ============================================================================
