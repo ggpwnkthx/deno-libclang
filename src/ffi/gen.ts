@@ -22,9 +22,6 @@ import {
   getTypeSize,
   getTypeSpelling,
   getValueType,
-  isInlineFunction,
-  isStaticFunction,
-  isVariadicFunction,
   visitChildren,
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
@@ -93,12 +90,6 @@ export interface FunctionInfo {
     column: number;
     offset: number;
   } | null;
-  /** Whether the function takes variadic arguments */
-  isVariadic: boolean;
-  /** Whether the function is inline */
-  isInline: boolean;
-  /** Whether the function is static */
-  isStatic: boolean;
 }
 
 /**
@@ -712,18 +703,11 @@ export function collectDeclarations(
           // Location not available
         }
 
-        const isVariadic = isVariadicFunction(childCursor);
-        const isInline = isInlineFunction(childCursor);
-        const isStatic = isStaticFunction(childCursor);
-
         data.functions.push({
           name: funcName,
           returnType: returnFFI,
           parameters,
           location,
-          isVariadic,
-          isInline,
-          isStatic,
         });
       }
     }

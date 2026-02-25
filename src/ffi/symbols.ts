@@ -256,19 +256,5 @@ export function getLibclangSymbols(): LibclangSymbols {
       }],
       result: "i64",
     } as unknown as LibclangSymbols["clang_Type_getAlignOf"],
-
-    // Cursor attributes
-    clang_Cursor_isStaticFunction: {
-      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
-      result: "i32",
-    } as unknown as LibclangSymbols["clang_Cursor_isStaticFunction"],
-    clang_Cursor_isInline: {
-      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
-      result: "i32",
-    } as unknown as LibclangSymbols["clang_Cursor_isInline"],
-    clang_Cursor_isVariadic: {
-      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
-      result: "i32",
-    } as unknown as LibclangSymbols["clang_Cursor_isVariadic"],
   };
 }

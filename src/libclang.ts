@@ -35,9 +35,6 @@ export {
   getCursorUSR,
   getEnumConstantDeclUnsignedValue,
   getEnumConstantDeclValue,
-  isInlineFunction,
-  isStaticFunction,
-  isVariadicFunction,
   visitChildren,
 } from "./libclang/cursor.ts";
 
