@@ -230,5 +230,15 @@ export function getLibclangSymbols(): LibclangSymbols {
       parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
       result: { struct: ["pointer", "u64"] },
     } as unknown as LibclangSymbols["clang_getCursorUSR"],
+
+    // Source location functions
+    clang_getInstantiationLocation: {
+      parameters: [{ struct: ["pointer", "pointer", "u32"] }],
+      result: { struct: ["pointer", "pointer", "u32"] },
+    } as unknown as LibclangSymbols["clang_getInstantiationLocation"],
+    clang_getDiagnosticLocation: {
+      parameters: ["pointer"],
+      result: { struct: ["pointer", "pointer", "u32"] },
+    } as unknown as LibclangSymbols["clang_getDiagnosticLocation"],
   };
 }

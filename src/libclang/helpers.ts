@@ -3,11 +3,13 @@
  */
 
 import type {
+  CXFile,
   CXSourceLocation,
   CXSourceRange,
   SourceLocation,
   SourceRange,
 } from "../ffi/types.ts";
+import { getFileName } from "./file.ts";
 
 /**
  * Parse a CXSourceLocation into a SourceLocation
@@ -18,13 +20,46 @@ import type {
 export function parseSourceLocation(
   location: CXSourceLocation,
 ): SourceLocation {
-  // The location is a struct with ptr_data and int_data
-  // This is a simplified version
+  // Parse the CXSourceLocation struct
+  // CXSourceLocation has: ptr_data: [NativePointer, NativePointer], int_data: number
+  let filePtr: Deno.PointerValue | null = null;
+  let line = 0;
+  let column = 0;
+
+  if (location && typeof location === "object") {
+    // Handle case where location is already parsed
+    if (location.ptr_data) {
+      filePtr = location.ptr_data[0] as Deno.PointerValue | null;
+      // int_data contains line in lower bits, column in upper bits
+      const intData = location.int_data as number;
+      line = intData & 0xFFFFFFFF;
+      column = (intData >> 32) & 0xFFFFFFFF;
+    }
+  }
+
+  const offset = 0;
+
+  // Get the file name from the file pointer
+  let file: string | null = null;
+  if (filePtr && filePtr !== null) {
+    try {
+      const cxFile = filePtr as unknown as CXFile;
+      const name = getFileName(cxFile);
+      if (name) {
+        file = name;
+      }
+    } catch (_e) {
+      // Return null for file if we can't get the name - this is a valid fallback
+      // rather than throwing an error for internal FFI issues
+      file = null;
+    }
+  }
+
   return {
-    file: null, // Would need to resolve from ptr_data
-    line: location.int_data & 0xFFFFFFFF,
-    column: (location.int_data >> 32) & 0xFFFFFFFF,
-    offset: 0, // Would need additional API call
+    file,
+    line,
+    column,
+    offset,
   };
 }
 

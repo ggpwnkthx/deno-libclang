@@ -278,6 +278,48 @@ export enum CXAvailabilityKind {
 }
 
 // ============================================================================
+// Linkage Kinds (enum CXLinkage)
+// ============================================================================
+
+/**
+ * Linkage kinds indicating the linkage of a declaration
+ */
+export enum CXLinkage {
+  NoLinkage = 0,
+  Internal = 1,
+  UniqueExternal = 2,
+  External = 3,
+}
+
+// ============================================================================
+// Visibility Kinds (enum CXVisibility)
+// ============================================================================
+
+/**
+ * Visibility kinds indicating the visibility of a declaration
+ */
+export enum CXVisibility {
+  Invalid = 0,
+  Hidden = 1,
+  Protected = 2,
+  Default = 3,
+}
+
+// ============================================================================
+// Access Specifier Kinds (enum CXAccessSpecifier)
+// ============================================================================
+
+/**
+ * Access specifier kinds indicating the access level of a declaration
+ */
+export enum CXAccessSpecifier {
+  Invalid = 0,
+  Public = 1,
+  Protected = 2,
+  Private = 3,
+}
+
+// ============================================================================
 // Translation Unit Flags
 // ============================================================================
 
@@ -509,4 +551,12 @@ export interface LibclangSymbols {
 
   // USR (Unique Symbol Reference) functions
   clang_getCursorUSR: (cursor: CXCursor) => CXString;
+
+  // Source location functions
+  clang_getInstantiationLocation: (
+    location: CXSourceLocation,
+  ) => CXSourceLocation;
+  clang_getDiagnosticLocation: (
+    diagnostic: CXDiagnostic,
+  ) => CXSourceLocation;
 }

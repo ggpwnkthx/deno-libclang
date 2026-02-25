@@ -52,6 +52,41 @@ export function ptrToCString(ptr: Deno.PointerValue): string {
 }
 
 /**
+ * Safely convert a value to a NativePointer
+ *
+ * This helper handles nullable pointers and other edge cases safely,
+ * avoiding the need for unsafe type assertions.
+ *
+ * @param value - The value to convert (can be null, undefined, pointer, or buffer)
+ * @returns A NativePointer or null
+ */
+export function toNativePointer(
+  value: Deno.PointerValue | null | undefined | Uint8Array,
+): Deno.PointerValue {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Uint8Array) {
+    // Use type assertion to handle the ArrayBuffer type mismatch
+    return Deno.UnsafePointer.of(value as Uint8Array<ArrayBuffer>);
+  }
+
+  // If it's already a valid pointer value, return it
+  return value as Deno.PointerValue;
+}
+
+/**
+ * Safely check if a pointer is non-null
+ *
+ * @param ptr - The pointer to check
+ * @returns true if the pointer is non-null
+ */
+export function isValidPointer(ptr: Deno.PointerValue | null): boolean {
+  return ptr !== null && ptr !== undefined;
+}
+
+/**
  * Convert a JavaScript string to a C string pointer
  *
  * @param str - The JavaScript string to convert
