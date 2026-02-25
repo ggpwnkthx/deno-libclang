@@ -7,9 +7,9 @@ import type {
   CXDiagnosticSeverity,
   CXTranslationUnit,
   Diagnostic,
-  SourceLocation,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
+import { parseSourceLocation } from "./helpers.ts";
 
 /**
  * Get the number of diagnostics in a translation unit
@@ -84,19 +84,21 @@ export function getDiagnosticSpelling(diagnostic: CXDiagnostic): string {
 export function getDiagnostics(unit: CXTranslationUnit): Diagnostic[] {
   const numDiagnostics = getNumDiagnostics(unit);
   const diagnostics: Diagnostic[] = [];
+  const sym = getSymbols();
 
   for (let i = 0; i < numDiagnostics; i++) {
     const diagnostic = getDiagnostic(unit, i);
     const severity = getDiagnosticSeverity(diagnostic);
     const message = getDiagnosticSpelling(diagnostic);
 
-    // For now, location is empty - could be enhanced
-    const location: SourceLocation = {
-      file: null,
-      line: 0,
-      column: 0,
-      offset: 0,
-    };
+    // Get diagnostic location using clang_getDiagnosticLocation
+    const cxLocation = sym.clang_getDiagnosticLocation(diagnostic);
+    const location = parseSourceLocation(
+      cxLocation as unknown as {
+        ptr_data: [Deno.PointerValue, Deno.PointerValue];
+        int_data: number;
+      },
+    );
 
     diagnostics.push({
       severity,

@@ -84,7 +84,31 @@ export function findLocalLibclang(): string | null {
 
   if (platform.os === "linux") {
     // Debian/Ubuntu multiarch - check these first (most likely to work on modern systems)
-    for (const ver of ["20"]) {
+    const versions = [
+      "3.5",
+      "3.6",
+      "3.7",
+      "3.8",
+      "3.9",
+      "4.0",
+      "5.0",
+      "6.0",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+    ];
+    for (const ver of versions) {
       possiblePaths.push(`/usr/lib/x86_64-linux-gnu/libclang-${ver}.so.1`);
       possiblePaths.push(`/usr/lib/aarch64-linux-gnu/libclang-${ver}.so.1`);
       // Also check /lib paths (older Debian/Ubuntu systems)
@@ -97,7 +121,7 @@ export function findLocalLibclang(): string | null {
     possiblePaths.push(`/usr/lib64/${libName}`);
     possiblePaths.push(`/usr/lib64/${libName}.1`);
     // Check system LLVM installations
-    for (const ver of ["20"]) {
+    for (const ver of versions) {
       possiblePaths.push(`/usr/lib/llvm-${ver}/lib/${libName}`);
       possiblePaths.push(`/usr/lib/llvm-${ver}/lib/${libName}.1`);
       possiblePaths.push(`/usr/lib/llvm-${ver}/lib/libclang.so.1`);
@@ -125,8 +149,33 @@ export function findLocalLibclang(): string | null {
       "C:\\Program Files (x86)";
     const localAppData = Deno.env.get("LOCALAPPDATA") || "";
 
+    const versions = [
+      "3.5",
+      "3.6",
+      "3.7",
+      "3.8",
+      "3.9",
+      "4.0",
+      "5.0",
+      "6.0",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+    ];
+
     for (const base of [programFiles, programFilesX86, localAppData]) {
-      for (const ver of ["20"]) {
+      for (const ver of versions) {
         possiblePaths.push(`${base}\\LLVM\\lib\\${libName}`);
         possiblePaths.push(`${base}\\LLVM-${ver}\\bin\\${libName}`);
       }

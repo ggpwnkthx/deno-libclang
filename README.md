@@ -18,6 +18,7 @@ C/C++/Objective-C source code.
 ```typescript
 import {
   createIndex,
+  CXChildVisitResult,
   CXCursorKind,
   disposeIndex,
   disposeTranslationUnit,
@@ -44,7 +45,7 @@ visitChildren(translationUnit, (cursor, _parent) => {
   );
 
   // Continue visiting
-  return CXCursorKind.CXChildVisit_Recurse;
+  return CXChildVisitResult.Recurse;
 });
 
 // Clean up

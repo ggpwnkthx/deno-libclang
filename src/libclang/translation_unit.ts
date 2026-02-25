@@ -15,41 +15,130 @@ import { getSymbols } from "./library.ts";
 /**
  * Convert a string array to a native pointer array (for command line args)
  *
- * Note: This implementation is simplified and returns null. Full support for
- * command line arguments requires persistent native memory allocation which is
- * complex in Deno FFI.
- *
- * @param _args - Array of string arguments (unused for now)
- * @returns Object with pointer (always null for now) and empty buffers
+ * @param args - Array of string arguments
+ * @returns Object with pointer to the char** array and buffers to keep alive
  */
-function argsToNativePointer(_args: string[]): {
+function argsToNativePointer(args: string[]): {
   ptr: NativePointer;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _keepAlive: Uint8Array[];
 } {
-  // Return null pointer for now - command line args not fully implemented
-  return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+  if (args.length === 0) {
+    return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+  }
+
+  const _keepAlive: Uint8Array[] = [];
+
+  // Create buffers for each argument (null-terminated C strings)
+  const argBuffers: Uint8Array[] = [];
+  for (const arg of args) {
+    const buffer = new TextEncoder().encode(arg + "\0");
+    argBuffers.push(buffer);
+    _keepAlive.push(buffer);
+  }
+
+  // Create array of pointers to each argument string
+  // Each pointer is 8 bytes on 64-bit systems
+  const ptrArraySize = args.length * 8;
+  const ptrArray = new Uint8Array(ptrArraySize);
+  _keepAlive.push(ptrArray);
+
+  // Fill the pointer array with addresses of each argument buffer
+  const view = new DataView(
+    ptrArray.buffer,
+    ptrArray.byteOffset,
+    ptrArray.byteLength,
+  );
+  for (let i = 0; i < args.length; i++) {
+    const ptr = Deno.UnsafePointer.of(argBuffers[i] as Uint8Array<ArrayBuffer>);
+    const ptrValue = Deno.UnsafePointer.value(ptr);
+    view.setBigUint64(i * 8, ptrValue, true);
+  }
+
+  return {
+    ptr: Deno.UnsafePointer.of(ptrArray as Uint8Array<ArrayBuffer>),
+    _keepAlive,
+  };
 }
 
 /**
  * Convert CXUnsavedFile array to native memory pointer
  *
- * Note: This implementation is simplified and returns null. Full support for
- * unsaved files requires persistent native memory allocation which is
- * complex in Deno FFI.
- *
- * @param _unsavedFiles - Array of unsaved files (unused for now)
- * @returns Object with pointer (always null for now) and empty buffers
+ * @param unsavedFiles - Array of unsaved files
+ * @returns Object with pointer to the CXUnsavedFile array and buffers to keep alive
  */
 function unsavedFilesToNativePointer(
-  _unsavedFiles: CXUnsavedFile[],
+  unsavedFiles: CXUnsavedFile[],
 ): {
   ptr: NativePointer;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _keepAlive: Uint8Array[];
 } {
-  // Return null pointer for now - unsaved files not fully implemented
-  return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+  if (unsavedFiles.length === 0) {
+    return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+  }
+
+  const _keepAlive: Uint8Array[] = [];
+
+  // CXUnsavedFile struct:
+  // - filename: const char*
+  // - contents: const char*
+  // - length: unsigned long (8 bytes on 64-bit)
+  // Total size: 8 + 8 + 8 = 24 bytes per struct
+
+  const structSize = 24;
+  const totalSize = unsavedFiles.length * structSize;
+  const structArray = new Uint8Array(totalSize);
+  _keepAlive.push(structArray);
+
+  const view = new DataView(
+    structArray.buffer,
+    structArray.byteOffset,
+    structArray.byteLength,
+  );
+
+  // Store encoded strings for each file
+  const filenameBuffers: Uint8Array[] = [];
+  const contentsBuffers: Uint8Array[] = [];
+
+  for (let i = 0; i < unsavedFiles.length; i++) {
+    const file = unsavedFiles[i];
+
+    // Encode filename as null-terminated C string
+    const filenameBuffer = new TextEncoder().encode(file.filename + "\0");
+    filenameBuffers.push(filenameBuffer);
+    _keepAlive.push(filenameBuffer);
+
+    // Encode contents as null-terminated C string
+    const contentsBuffer = new TextEncoder().encode(file.contents + "\0");
+    contentsBuffers.push(contentsBuffer);
+    _keepAlive.push(contentsBuffer);
+
+    // Set struct fields at offset i * 24
+    const offset = i * structSize;
+
+    // filename pointer (offset 0)
+    const filenamePtr = Deno.UnsafePointer.of(
+      filenameBuffer as Uint8Array<ArrayBuffer>,
+    );
+    view.setBigUint64(offset, Deno.UnsafePointer.value(filenamePtr), true);
+
+    // contents pointer (offset 8)
+    const contentsPtr = Deno.UnsafePointer.of(
+      contentsBuffer as Uint8Array<ArrayBuffer>,
+    );
+    view.setBigUint64(
+      offset + 8,
+      Deno.UnsafePointer.value(contentsPtr),
+      true,
+    );
+
+    // length (offset 16)
+    view.setBigUint64(offset + 16, BigInt(file.length), true);
+  }
+
+  return {
+    ptr: Deno.UnsafePointer.of(structArray as Uint8Array<ArrayBuffer>),
+    _keepAlive,
+  };
 }
 
 /**
