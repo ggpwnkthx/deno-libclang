@@ -35,6 +35,13 @@ export function parseSourceLocation(
  * @returns A SourceRange object with start and end locations
  */
 export function parseSourceRange(range: CXSourceRange): SourceRange {
+  // Handle null or invalid ranges
+  if (!range.ptr_data || !range.ptr_data[0] || !range.ptr_data[1]) {
+    return {
+      start: { file: null, line: 0, column: 0, offset: 0 },
+      end: { file: null, line: 0, column: 0, offset: 0 },
+    };
+  }
   return {
     start: parseSourceLocation(
       range.ptr_data[0] as unknown as CXSourceLocation,

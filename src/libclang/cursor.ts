@@ -87,24 +87,32 @@ export function getCursorDisplayName(cursor: CXCursor): string {
 /**
  * Get the location of a cursor in the source code
  *
- * @param cursor - The cursor to get the location from
+ * @param cursor - The cursor to get the location from (CXCursor or Uint8Array buffer)
  * @returns SourceLocation containing file, line, column, and offset
  */
-export function getCursorLocation(cursor: CXCursor): SourceLocation {
+export function getCursorLocation(
+  cursor: CXCursor | Uint8Array,
+): SourceLocation {
   const sym = getSymbols();
-  const location = sym.clang_getCursorLocation(cursor);
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  const location = sym.clang_getCursorLocation(cursorArg);
   return parseSourceLocation(location);
 }
 
 /**
  * Get the extent (source range) of a cursor
  *
- * @param cursor - The cursor to get the extent from
+ * @param cursor - The cursor to get the extent from (CXCursor or Uint8Array buffer)
  * @returns SourceRange containing start and end locations
  */
-export function getCursorExtent(cursor: CXCursor): SourceRange {
+export function getCursorExtent(cursor: CXCursor | Uint8Array): SourceRange {
   const sym = getSymbols();
-  const range = sym.clang_getCursorExtent(cursor);
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  const range = sym.clang_getCursorExtent(cursorArg);
   return parseSourceRange(range);
 }
 
@@ -265,12 +273,15 @@ export function getCursorKindSpelling(kind: CXCursorKind): string {
 /**
  * Get the availability of a cursor
  *
- * @param cursor - The cursor to check availability for
+ * @param cursor - The cursor to check availability for (CXCursor or Uint8Array buffer)
  * @returns CXAvailabilityKind value (0=Available, 1=Deprecated, 2=NotAvailable, 3=NotAccessible)
  */
-export function getCursorAvailability(cursor: CXCursor): number {
+export function getCursorAvailability(cursor: CXCursor | Uint8Array): number {
   const sym = getSymbols();
-  return sym.clang_getCursorAvailability(cursor);
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  return sym.clang_getCursorAvailability(cursorArg);
 }
 
 /**
@@ -278,12 +289,15 @@ export function getCursorAvailability(cursor: CXCursor): number {
  *
  * For example, for a reference to a variable, returns the declaration of that variable.
  *
- * @param cursor - The cursor to get the referenced cursor from
+ * @param cursor - The cursor to get the referenced cursor from (CXCursor or Uint8Array buffer)
  * @returns The referenced CXCursor, or a null cursor if not available
  */
-export function getCursorReferenced(cursor: CXCursor): CXCursor {
+export function getCursorReferenced(cursor: CXCursor | Uint8Array): CXCursor {
   const sym = getSymbols();
-  return sym.clang_getCursorReferenced(cursor);
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  return sym.clang_getCursorReferenced(cursorArg);
 }
 
 /**
@@ -291,12 +305,15 @@ export function getCursorReferenced(cursor: CXCursor): CXCursor {
  *
  * Returns the definition of the entity that this cursor refers to.
  *
- * @param cursor - The cursor to get the definition from
+ * @param cursor - The cursor to get the definition from (CXCursor or Uint8Array buffer)
  * @returns The defining CXCursor, or a null cursor if no definition is available
  */
-export function getCursorDefinition(cursor: CXCursor): CXCursor {
+export function getCursorDefinition(cursor: CXCursor | Uint8Array): CXCursor {
   const sym = getSymbols();
-  return sym.clang_getCursorDefinition(cursor);
+  const cursorArg = cursor instanceof Uint8Array
+    ? cursor as unknown as CXCursor
+    : cursor;
+  return sym.clang_getCursorDefinition(cursorArg);
 }
 
 /**

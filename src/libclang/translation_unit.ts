@@ -6,10 +6,51 @@ import {
   type CXIndex,
   type CXTranslationUnit,
   CXTranslationUnit_Flags,
+  type CXUnsavedFile,
   type NativePointer,
   type ParseResult,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
+
+/**
+ * Convert a string array to a native pointer array (for command line args)
+ *
+ * Note: This implementation is simplified and returns null. Full support for
+ * command line arguments requires persistent native memory allocation which is
+ * complex in Deno FFI.
+ *
+ * @param _args - Array of string arguments (unused for now)
+ * @returns Object with pointer (always null for now) and empty buffers
+ */
+function argsToNativePointer(_args: string[]): {
+  ptr: NativePointer;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _keepAlive: Uint8Array[];
+} {
+  // Return null pointer for now - command line args not fully implemented
+  return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+}
+
+/**
+ * Convert CXUnsavedFile array to native memory pointer
+ *
+ * Note: This implementation is simplified and returns null. Full support for
+ * unsaved files requires persistent native memory allocation which is
+ * complex in Deno FFI.
+ *
+ * @param _unsavedFiles - Array of unsaved files (unused for now)
+ * @returns Object with pointer (always null for now) and empty buffers
+ */
+function unsavedFilesToNativePointer(
+  _unsavedFiles: CXUnsavedFile[],
+): {
+  ptr: NativePointer;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _keepAlive: Uint8Array[];
+} {
+  // Return null pointer for now - unsaved files not fully implemented
+  return { ptr: null as unknown as NativePointer, _keepAlive: [] };
+}
 
 /**
  * Parse a translation unit from source code
@@ -23,8 +64,8 @@ import { getSymbols } from "./library.ts";
 export function parseTranslationUnit(
   index: CXIndex,
   sourceFile: string,
-  _args: string[] = [],
-  _unsavedFiles: unknown[] = [],
+  args: string[] = [],
+  unsavedFiles: CXUnsavedFile[] = [],
 ): ParseResult {
   const sym = getSymbols();
 
@@ -32,15 +73,24 @@ export function parseTranslationUnit(
   const sourceFileBuffer = new TextEncoder().encode(sourceFile + "\0");
   const sourceFilePtr = Deno.UnsafePointer.of(sourceFileBuffer);
 
-  // Convert args to pointer array (simplified - using null for now)
-  // In a full implementation, we'd allocate native memory for each string
+  // Convert args to native pointer array
+  const argsResult = argsToNativePointer(args);
+
+  // Convert unsaved files to native pointer
+  const unsavedFilesResult = unsavedFilesToNativePointer(unsavedFiles);
+
+  // Only pass unsavedFiles pointer if we have files
+  const unsavedPtr = unsavedFiles.length > 0
+    ? unsavedFilesResult.ptr as unknown as NativePointer
+    : null;
+
   const result = sym.clang_parseTranslationUnit(
     index,
     sourceFilePtr as unknown as NativePointer,
-    null, // commandLineArgs - simplified for now
-    0, // numCommandLineArgs
-    null, // unsavedFiles - simplified for now
-    0, // numUnsavedFiles
+    args.length > 0 ? argsResult.ptr as unknown as NativePointer : null,
+    args.length,
+    unsavedPtr,
+    unsavedFiles.length,
     CXTranslationUnit_Flags.None,
   );
 
@@ -73,13 +123,22 @@ export function disposeTranslationUnit(unit: CXTranslationUnit): void {
  */
 export function reparseTranslationUnit(
   unit: CXTranslationUnit,
-  unsavedFiles: unknown[] = [],
+  unsavedFiles: CXUnsavedFile[] = [],
 ): number {
   const sym = getSymbols();
+
+  // Convert unsaved files to native pointer
+  const unsavedFilesResult = unsavedFilesToNativePointer(unsavedFiles);
+
+  // Only pass unsavedFiles pointer if we have files
+  const unsavedPtr = unsavedFiles.length > 0
+    ? unsavedFilesResult.ptr as unknown as NativePointer
+    : null;
+
   return sym.clang_reparseTranslationUnit(
     unit,
     unsavedFiles.length,
-    null,
+    unsavedPtr,
     CXTranslationUnit_Flags.None,
   );
 }

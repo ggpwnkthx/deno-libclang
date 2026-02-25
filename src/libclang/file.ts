@@ -49,8 +49,13 @@ export function getFileName(file: CXFile): string {
  * @returns True if the file is null/invalid, false otherwise
  */
 export function fileIsNull(file: CXFile): boolean {
-  // CXFile is a pointer - check if it's null
-  return file === null || file === undefined || Number(file) === 0;
+  // CXFile is a NativePointer - check if it's null or undefined
+  if (file === null || file === undefined) {
+    return true;
+  }
+  // NativePointer can be checked with Deno.UnsafePointer.of(null)
+  const ptr = file as unknown as Deno.PointerValue;
+  return ptr === null;
 }
 
 /**

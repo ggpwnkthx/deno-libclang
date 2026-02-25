@@ -3,6 +3,8 @@
 Deno FFI bindings for libclang - parse, analyze, and extract information from
 C/C++/Objective-C source code.
 
+[![JSR](https://jsr.io/badges/@ggpwnkthx/libclang)](https://jsr.io/@ggpwnkthx/libclang)
+
 ## Prerequisites
 
 - [Deno](https://deno.land/) runtime
