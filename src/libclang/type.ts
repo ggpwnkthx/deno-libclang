@@ -271,3 +271,35 @@ export function getTypeKindSpelling(kind: CXTypeKind): string {
   sym.clang_disposeString(cxString);
   return result;
 }
+
+/**
+ * Get the size of a type in bytes
+ *
+ * @param type - CXType or Uint8Array buffer
+ * @returns The size in bytes, or -1 if size is not available
+ */
+export function getTypeSize(type: CXType | Uint8Array): number {
+  const sym = getSymbols();
+
+  // Convert CXType to buffer if needed
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
+
+  const result = sym.clang_Type_getSizeOf(typeBuffer as unknown as CXType);
+  return result;
+}
+
+/**
+ * Get the alignment of a type in bytes
+ *
+ * @param type - CXType or Uint8Array buffer
+ * @returns The alignment in bytes, or -1 if alignment is not available
+ */
+export function getTypeAlignment(type: CXType | Uint8Array): number {
+  const sym = getSymbols();
+
+  // Convert CXType to buffer if needed
+  const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
+
+  const result = sym.clang_Type_getAlignOf(typeBuffer as unknown as CXType);
+  return result;
+}

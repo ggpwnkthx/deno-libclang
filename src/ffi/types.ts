@@ -625,4 +625,13 @@ export interface LibclangSymbols {
   clang_getDiagnosticLocation: (
     diagnostic: CXDiagnostic,
   ) => CXSourceLocation;
+
+  // Type size and alignment
+  clang_Type_getSizeOf: (type: CXType) => number;
+  clang_Type_getAlignOf: (type: CXType) => number;
+
+  // Cursor attributes
+  clang_Cursor_isStaticFunction: (cursor: CXCursor) => number;
+  clang_Cursor_isInline: (cursor: CXCursor) => number;
+  clang_Cursor_isVariadic: (cursor: CXCursor) => number;
 }

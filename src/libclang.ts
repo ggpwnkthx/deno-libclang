@@ -35,6 +35,9 @@ export {
   getCursorUSR,
   getEnumConstantDeclUnsignedValue,
   getEnumConstantDeclValue,
+  isInlineFunction,
+  isStaticFunction,
+  isVariadicFunction,
   visitChildren,
 } from "./libclang/cursor.ts";
 
@@ -45,9 +48,11 @@ export {
   getNumArgTypes,
   getPointeeType,
   getResultType,
+  getTypeAlignment,
   getTypedefUnderlyingType,
   getTypeKind,
   getTypeKindSpelling,
+  getTypeSize,
   getTypeSpelling,
   getValueType,
 } from "./libclang/type.ts";

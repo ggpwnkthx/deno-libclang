@@ -8,6 +8,7 @@ import {
   type CXCursor,
   type CXTranslationUnit,
   type CXType,
+  getCursorLocation,
   getCursorSpelling,
   getCursorType,
   getCursorUSR,
@@ -15,10 +16,15 @@ import {
   getPointeeType,
   getResultType,
   getTranslationUnitCursor,
+  getTypeAlignment,
   getTypeKind,
   getTypeKindSpelling,
+  getTypeSize,
   getTypeSpelling,
   getValueType,
+  isInlineFunction,
+  isStaticFunction,
+  isVariadicFunction,
   visitChildren,
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
@@ -53,6 +59,21 @@ export interface StructInfo {
   isPacked: boolean;
   /** Whether this is a union (true) or struct (false) */
   isUnion: boolean;
+  /** Size in bytes (null if unavailable) */
+  size: number | null;
+  /** Alignment in bytes (null if unavailable) */
+  alignment: number | null;
+  /** Source file location */
+  location: {
+    file: string | null;
+    line: number;
+    column: number;
+    offset: number;
+  } | null;
+  /** Whether the struct is anonymous */
+  isAnonymous: boolean;
+  /** Number of fields */
+  fieldCount: number;
 }
 
 /**
@@ -65,6 +86,19 @@ export interface FunctionInfo {
   returnType: FFIType;
   /** Array of parameter definitions */
   parameters: { name: string; type: FFIType }[];
+  /** Source file location */
+  location: {
+    file: string | null;
+    line: number;
+    column: number;
+    offset: number;
+  } | null;
+  /** Whether the function takes variadic arguments */
+  isVariadic: boolean;
+  /** Whether the function is inline */
+  isInline: boolean;
+  /** Whether the function is static */
+  isStatic: boolean;
 }
 
 /**
@@ -489,14 +523,60 @@ export function collectDeclarations(
         );
         const key = usr || name;
 
-        // Check if this is a packed struct by examining field offsets
-        // For now, we'll mark it as not packed (can be enhanced later)
+        // Get the type for size/alignment info
+        const structType = getCursorType(childCursor);
+        let size: number | null = null;
+        let alignment: number | null = null;
+        try {
+          const sizeResult = getTypeSize(structType);
+          if (sizeResult >= 0) {
+            size = Number(sizeResult);
+          }
+        } catch {
+          // Size not available
+        }
+        try {
+          const alignResult = getTypeAlignment(structType);
+          if (alignResult >= 0) {
+            alignment = Number(alignResult);
+          }
+        } catch {
+          // Alignment not available
+        }
+
+        // Get source location
+        let location: {
+          file: string | null;
+          line: number;
+          column: number;
+          offset: number;
+        } | null = null;
+        try {
+          const loc = getCursorLocation(childCursor);
+          location = {
+            file: loc.file,
+            line: loc.line,
+            column: loc.column,
+            offset: loc.offset,
+          };
+        } catch {
+          // Location not available
+        }
+
+        // Check if anonymous (name is empty but we have a USR)
+        const isAnonymous = !name && !!usr;
+
         data.structs.set(key, {
           name: name || `anon_${key.slice(0, 8)}`,
           usr,
           fields,
           isPacked: false,
           isUnion: false,
+          size,
+          alignment,
+          location,
+          isAnonymous,
+          fieldCount: fields.length,
         });
       }
     } else if (kind === CXCursorKind.UnionDecl) {
@@ -513,12 +593,60 @@ export function collectDeclarations(
 
         warnings.push(`Union '${name || key}' detected - treating as bytes`);
 
+        // Get the type for size/alignment info
+        const unionType = getCursorType(childCursor);
+        let size: number | null = null;
+        let alignment: number | null = null;
+        try {
+          const sizeResult = getTypeSize(unionType);
+          if (sizeResult >= 0) {
+            size = Number(sizeResult);
+          }
+        } catch {
+          // Size not available
+        }
+        try {
+          const alignResult = getTypeAlignment(unionType);
+          if (alignResult >= 0) {
+            alignment = Number(alignResult);
+          }
+        } catch {
+          // Alignment not available
+        }
+
+        // Get source location
+        let location: {
+          file: string | null;
+          line: number;
+          column: number;
+          offset: number;
+        } | null = null;
+        try {
+          const loc = getCursorLocation(childCursor);
+          location = {
+            file: loc.file,
+            line: loc.line,
+            column: loc.column,
+            offset: loc.offset,
+          };
+        } catch {
+          // Location not available
+        }
+
+        // Check if anonymous (name is empty but we have a USR)
+        const isAnonymous = !name && !!usr;
+
         data.structs.set(key, {
           name: name || `anon_union_${key.slice(0, 8)}`,
           usr,
           fields,
           isPacked: false,
           isUnion: true,
+          size,
+          alignment,
+          location,
+          isAnonymous,
+          fieldCount: fields.length,
         });
       }
     } else if (kind === CXCursorKind.FunctionDecl) {
@@ -565,10 +693,37 @@ export function collectDeclarations(
           }
         }
 
+        // Get function attributes
+        let location: {
+          file: string | null;
+          line: number;
+          column: number;
+          offset: number;
+        } | null = null;
+        try {
+          const loc = getCursorLocation(childCursor);
+          location = {
+            file: loc.file,
+            line: loc.line,
+            column: loc.column,
+            offset: loc.offset,
+          };
+        } catch {
+          // Location not available
+        }
+
+        const isVariadic = isVariadicFunction(childCursor);
+        const isInline = isInlineFunction(childCursor);
+        const isStatic = isStaticFunction(childCursor);
+
         data.functions.push({
           name: funcName,
           returnType: returnFFI,
           parameters,
+          location,
+          isVariadic,
+          isInline,
+          isStatic,
         });
       }
     }

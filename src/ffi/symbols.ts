@@ -240,5 +240,35 @@ export function getLibclangSymbols(): LibclangSymbols {
       parameters: ["pointer"],
       result: { struct: ["pointer", "pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getDiagnosticLocation"],
+
+    // Type size and alignment
+    clang_Type_getSizeOf: {
+      parameters: [{
+        // CXType struct
+        struct: ["u32", "u32", "pointer", "pointer"],
+      }],
+      result: "i64",
+    } as unknown as LibclangSymbols["clang_Type_getSizeOf"],
+    clang_Type_getAlignOf: {
+      parameters: [{
+        // CXType struct
+        struct: ["u32", "u32", "pointer", "pointer"],
+      }],
+      result: "i64",
+    } as unknown as LibclangSymbols["clang_Type_getAlignOf"],
+
+    // Cursor attributes
+    clang_Cursor_isStaticFunction: {
+      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
+      result: "i32",
+    } as unknown as LibclangSymbols["clang_Cursor_isStaticFunction"],
+    clang_Cursor_isInline: {
+      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
+      result: "i32",
+    } as unknown as LibclangSymbols["clang_Cursor_isInline"],
+    clang_Cursor_isVariadic: {
+      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
+      result: "i32",
+    } as unknown as LibclangSymbols["clang_Cursor_isVariadic"],
   };
 }
