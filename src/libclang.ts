@@ -96,5 +96,8 @@ export type {
  * Type for cursor that can be either:
  * - CXCursor: from translation unit (passed directly to FFI)
  * - Uint8Array: buffer from visitChildren (native CXCursor struct)
+ *
+ * Many functions in this library accept either a CXCursor or a Uint8Array buffer
+ * to provide flexibility when working with cursors from different sources.
  */
 export type CXCursorOrBuffer = import("./ffi/types.ts").CXCursor | Uint8Array;

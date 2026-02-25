@@ -7,6 +7,10 @@
 
 /**
  * Get the library filename based on the current platform
+ *
+ * @param libName - The base name of the library (without extension)
+ * @returns The platform-specific library filename
+ * @throws Error if the operating system is not supported
  */
 export function getPlatformLibName(libName: string): string {
   const os = Deno.build.os;
@@ -24,6 +28,8 @@ export function getPlatformLibName(libName: string): string {
 
 /**
  * Get common library paths for the current OS
+ *
+ * @returns Array of common library paths for the current platform
  */
 export function getCommonLibPaths(): string[] {
   const os = Deno.build.os;

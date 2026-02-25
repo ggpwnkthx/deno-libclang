@@ -6,9 +6,15 @@
 
 import { pathExists } from "../utils/platform.ts";
 
+/**
+ * Platform information interface
+ */
 export interface Platform {
+  /** Operating system */
   os: "linux" | "darwin" | "windows";
+  /** CPU architecture */
   arch: "x86_64" | "aarch64" | "arm64" | "x64" | "x86";
+  /** Archive extension */
   ext: "tar.xz" | "zip";
 }
 

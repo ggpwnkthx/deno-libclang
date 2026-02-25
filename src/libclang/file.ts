@@ -12,6 +12,10 @@ import { getSymbols } from "./library.ts";
 
 /**
  * Get a file from a translation unit
+ *
+ * @param unit - The translation unit
+ * @param fileName - The name of the file to get
+ * @returns The CXFile handle for the file
  */
 export function getFile(unit: CXTranslationUnit, fileName: string): CXFile {
   const sym = getSymbols();
@@ -23,6 +27,9 @@ export function getFile(unit: CXTranslationUnit, fileName: string): CXFile {
 
 /**
  * Get the name of a file
+ *
+ * @param file - The CXFile to get the name from
+ * @returns The file name string
  */
 export function getFileName(file: CXFile): string {
   const sym = getSymbols();
@@ -35,7 +42,11 @@ export function getFileName(file: CXFile): string {
 
 /**
  * Check if a file is null
- * In LLVM 20+, clang_file_isNull was removed - check pointer directly
+ *
+ * In LLVM 20+, clang_file_isNull was removed - check pointer directly.
+ *
+ * @param file - The CXFile to check
+ * @returns True if the file is null/invalid, false otherwise
  */
 export function fileIsNull(file: CXFile): boolean {
   // CXFile is a pointer - check if it's null
@@ -43,7 +54,13 @@ export function fileIsNull(file: CXFile): boolean {
 }
 
 /**
- * Get a source location
+ * Get a source location from a file, line, and column
+ *
+ * @param unit - The translation unit
+ * @param file - The CXFile
+ * @param line - The line number (1-based)
+ * @param column - The column number (1-based)
+ * @returns The CXSourceLocation
  */
 export function getLocation(
   unit: CXTranslationUnit,

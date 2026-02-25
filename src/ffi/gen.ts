@@ -23,35 +23,68 @@ import {
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
 
+/**
+ * Represents a field in a struct or union
+ */
 export interface StructField {
+  /** The field name */
   name: string;
+  /** The FFI type of the field */
   type: FFIType;
+  /** Optional byte offset of the field */
   offset?: number;
+  /** Whether this is a bitfield */
   isBitfield?: boolean;
+  /** Width in bits if this is a bitfield */
   bitfieldWidth?: number;
 }
 
+/**
+ * Information about a struct or union
+ */
 export interface StructInfo {
+  /** The struct/union name */
   name: string;
+  /** The USR (Unique Symbol Reference) */
   usr: string;
+  /** Array of field definitions */
   fields: StructField[];
+  /** Whether the struct is packed */
   isPacked: boolean;
+  /** Whether this is a union (true) or struct (false) */
   isUnion: boolean;
 }
 
+/**
+ * Information about a function
+ */
 export interface FunctionInfo {
+  /** The function name */
   name: string;
+  /** The return type */
   returnType: FFIType;
+  /** Array of parameter definitions */
   parameters: { name: string; type: FFIType }[];
 }
 
+/**
+ * FFI type representation - either a primitive type or a struct type
+ */
 export type FFIType = string | { struct: string[] };
 
+/**
+ * Collected data from parsing a header file
+ */
 export interface CollectedData {
+  /** Map of struct USR/name to struct information */
   structs: Map<string, StructInfo>;
+  /** Array of function information */
   functions: FunctionInfo[];
 }
 
+/**
+ * Options for FFI generation
+ */
 export interface FFIGeneratorOptions {
   /** Types that should be treated as handles (opaque pointers) */
   handleTypes: readonly string[];
@@ -65,6 +98,8 @@ export interface FFIGeneratorOptions {
 
 /**
  * Create default options for FFI generation
+ *
+ * @returns Default FFIGeneratorOptions with empty configurations
  */
 export function createDefaultOptions(): FFIGeneratorOptions {
   return {
@@ -343,6 +378,12 @@ function is64BitPlatform(): boolean {
   return true;
 }
 
+/**
+ * Convert a C name to a TypeScript-safe identifier
+ *
+ * @param name - The C identifier name
+ * @returns A TypeScript-safe identifier
+ */
 export function makeTSafeName(name: string): string {
   // Remove invalid characters and make safe for TS
   return name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^(\d)/, "_$1");
@@ -388,6 +429,17 @@ function getKindFromBuffer(buffer: Uint8Array): CXCursorKind {
   return view.getUint32(0, true) as CXCursorKind;
 }
 
+/**
+ * Collect struct and function declarations from a translation unit
+ *
+ * @param tu - The translation unit to analyze
+ * @param bufferTypes - Types that should be passed as buffers
+ * @param handleTypes - Types that should be treated as handles
+ * @param warnings - Array to collect warnings during parsing
+ * @param typeMappings - Optional custom type mappings
+ * @param handleParams - Optional parameter names treated as handles
+ * @returns CollectedData containing structs and functions
+ */
 export function collectDeclarations(
   tu: CXTranslationUnit,
   bufferTypes: string[],
@@ -520,6 +572,15 @@ export function collectDeclarations(
   return data;
 }
 
+/**
+ * Generate the output header for FFI bindings
+ *
+ * @param _data - The collected data (unused in this simple implementation)
+ * @param headerPath - Path to the source header file
+ * @param clangArgs - Arguments passed to Clang
+ * @param warnings - Array of warnings to include
+ * @returns Generated output as a string
+ */
 export function generateOutput(
   _data: CollectedData,
   headerPath: string,

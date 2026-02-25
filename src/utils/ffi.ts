@@ -12,6 +12,9 @@ const encoder = new TextEncoder();
 
 /**
  * Create a pointer buffer for passing/receiving pointers
+ *
+ * @param size - The size of the buffer in bytes (default: 8 for pointer size)
+ * @returns A Uint8Array buffer of the specified size
  */
 export function createPointerBuffer(size: number = POINTER_SIZE): Uint8Array {
   return new Uint8Array(size);
@@ -19,6 +22,9 @@ export function createPointerBuffer(size: number = POINTER_SIZE): Uint8Array {
 
 /**
  * Extract a pointer from a buffer
+ *
+ * @param buffer - The buffer containing the pointer data
+ * @returns The pointer value as a bigint
  */
 export function getPointer(buffer: Uint8Array): bigint {
   return new DataView(buffer.buffer).getBigUint64(0, true);
@@ -26,6 +32,9 @@ export function getPointer(buffer: Uint8Array): bigint {
 
 /**
  * Set a pointer in a buffer
+ *
+ * @param buffer - The buffer to write the pointer to
+ * @param ptr - The pointer value to set
  */
 export function setPointer(buffer: Uint8Array, ptr: bigint): void {
   new DataView(buffer.buffer).setBigUint64(0, ptr, true);
@@ -33,6 +42,9 @@ export function setPointer(buffer: Uint8Array, ptr: bigint): void {
 
 /**
  * Convert a C string pointer to a JavaScript string
+ *
+ * @param ptr - The pointer to the C string
+ * @returns The JavaScript string representation
  */
 export function ptrToCString(ptr: Deno.PointerValue): string {
   if (!ptr) return "";
@@ -41,6 +53,9 @@ export function ptrToCString(ptr: Deno.PointerValue): string {
 
 /**
  * Convert a JavaScript string to a C string pointer
+ *
+ * @param str - The JavaScript string to convert
+ * @returns A pointer to the encoded string data
  */
 export function cstringToPtr(str: string): Deno.PointerValue {
   const data = encoder.encode(str + "\0");

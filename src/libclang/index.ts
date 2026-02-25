@@ -25,6 +25,8 @@ export function createIndex(
 
 /**
  * Dispose of an index
+ *
+ * @param index - The index to dispose
  */
 export function disposeIndex(index: CXIndex): void {
   const sym = getSymbols();

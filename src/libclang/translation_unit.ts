@@ -14,11 +14,11 @@ import { getSymbols } from "./library.ts";
 /**
  * Parse a translation unit from source code
  *
- * @param index - The index to use
+ * @param index - The CXIndex to use for parsing
  * @param sourceFile - Path to the source file to parse
- * @param args - Additional command-line arguments for the compiler
- * @param unsavedFiles - Files that haven't been saved to disk
- * @returns The parse function parseTranslationUnit result
+ * @param args - Optional additional command-line arguments for the compiler
+ * @param unsavedFiles - Optional files that haven't been saved to disk
+ * @returns ParseResult containing the translation unit or error
  */
 export function parseTranslationUnit(
   index: CXIndex,
@@ -56,6 +56,8 @@ export function parseTranslationUnit(
 
 /**
  * Dispose of a translation unit
+ *
+ * @param unit - The translation unit to dispose
  */
 export function disposeTranslationUnit(unit: CXTranslationUnit): void {
   const sym = getSymbols();
@@ -64,6 +66,10 @@ export function disposeTranslationUnit(unit: CXTranslationUnit): void {
 
 /**
  * Reparse a translation unit
+ *
+ * @param unit - The translation unit to reparse
+ * @param unsavedFiles - Optional unsaved files to include in reparsing
+ * @returns Number indicating success (0) or failure (non-zero)
  */
 export function reparseTranslationUnit(
   unit: CXTranslationUnit,
@@ -80,6 +86,9 @@ export function reparseTranslationUnit(
 
 /**
  * Get the cursor for a translation unit
+ *
+ * @param unit - The translation unit to get the cursor from
+ * @returns CXCursor representing the translation unit
  */
 export function getTranslationUnitCursor(
   unit: CXTranslationUnit,

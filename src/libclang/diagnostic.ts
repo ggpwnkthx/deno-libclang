@@ -13,6 +13,9 @@ import { getSymbols } from "./library.ts";
 
 /**
  * Get the number of diagnostics in a translation unit
+ *
+ * @param unit - The translation unit to get diagnostics from
+ * @returns The number of diagnostics
  */
 export function getNumDiagnostics(unit: CXTranslationUnit): number {
   const sym = getSymbols();
@@ -20,7 +23,11 @@ export function getNumDiagnostics(unit: CXTranslationUnit): number {
 }
 
 /**
- * Get a diagnostic from a translation unit
+ * Get a diagnostic from a translation unit by index
+ *
+ * @param unit - The translation unit to get the diagnostic from
+ * @param index - The index of the diagnostic (0-based)
+ * @returns The CXDiagnostic at the specified index
  */
 export function getDiagnostic(
   unit: CXTranslationUnit,
@@ -32,6 +39,8 @@ export function getDiagnostic(
 
 /**
  * Dispose of a diagnostic
+ *
+ * @param diagnostic - The diagnostic to dispose
  */
 export function disposeDiagnostic(diagnostic: CXDiagnostic): void {
   const sym = getSymbols();
@@ -40,6 +49,9 @@ export function disposeDiagnostic(diagnostic: CXDiagnostic): void {
 
 /**
  * Get the severity of a diagnostic
+ *
+ * @param diagnostic - The diagnostic to get the severity from
+ * @returns The CXDiagnosticSeverity value (0=Ignored, 1=Note, 2=Warning, 3=Error, 4=Fatal)
  */
 export function getDiagnosticSeverity(
   diagnostic: CXDiagnostic,
@@ -50,6 +62,9 @@ export function getDiagnosticSeverity(
 
 /**
  * Get the spelling (message) of a diagnostic
+ *
+ * @param diagnostic - The diagnostic to get the message from
+ * @returns The diagnostic message string
  */
 export function getDiagnosticSpelling(diagnostic: CXDiagnostic): string {
   const sym = getSymbols();
@@ -62,6 +77,9 @@ export function getDiagnosticSpelling(diagnostic: CXDiagnostic): string {
 
 /**
  * Get all diagnostics from a translation unit
+ *
+ * @param unit - The translation unit to get diagnostics from
+ * @returns Array of Diagnostic objects containing severity, message, and location
  */
 export function getDiagnostics(unit: CXTranslationUnit): Diagnostic[] {
   const numDiagnostics = getNumDiagnostics(unit);

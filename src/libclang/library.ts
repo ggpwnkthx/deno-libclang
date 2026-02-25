@@ -29,7 +29,10 @@ function loadLibclang(libPath: string | undefined): void {
 }
 
 /**
- * Unload libclang library
+ * Unload the libclang library
+ *
+ * Closes the dynamic library handle and clears all loaded symbols.
+ * After calling this, any further FFI calls will fail until load() is called again.
  */
 export function unload(): void {
   if (libclang !== null) {
@@ -41,7 +44,10 @@ export function unload(): void {
 }
 
 /**
- * Ensure symbols are loaded
+ * Get the loaded libclang symbols
+ *
+ * @returns The libclang symbols object for making FFI calls
+ * @throws Error if libclang has not been loaded yet
  */
 export function getSymbols(): ReturnType<typeof getLibclangSymbols> {
   if (!symbols) {
@@ -52,6 +58,9 @@ export function getSymbols(): ReturnType<typeof getLibclangSymbols> {
 
 /**
  * Load libclang from a specific path, or auto-detect if not provided
+ *
+ * @param libPath - Optional path to libclang library. If not provided, auto-detects
+ * @throws Error if libclang cannot be loaded from the specified path
  */
 export function load(libPath?: string): void {
   loadLibclang(libPath);

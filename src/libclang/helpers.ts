@@ -11,6 +11,9 @@ import type {
 
 /**
  * Parse a CXSourceLocation into a SourceLocation
+ *
+ * @param location - The CXSourceLocation from libclang
+ * @returns A SourceLocation object with file, line, column, and offset
  */
 export function parseSourceLocation(
   location: CXSourceLocation,
@@ -27,6 +30,9 @@ export function parseSourceLocation(
 
 /**
  * Parse a CXSourceRange into a SourceRange
+ *
+ * @param range - The CXSourceRange from libclang
+ * @returns A SourceRange object with start and end locations
  */
 export function parseSourceRange(range: CXSourceRange): SourceRange {
   return {

@@ -22,6 +22,9 @@ import { NativeCXCursor } from "./native_cursor.ts";
 
 /**
  * Get the kind of a cursor
+ *
+ * @param cursor - The cursor to get the kind from
+ * @returns The CXCursorKind value identifying the type of AST node
  */
 export function getCursorKind(cursor: CXCursor): CXCursorKind {
   const sym = getSymbols();
@@ -29,7 +32,10 @@ export function getCursorKind(cursor: CXCursor): CXCursorKind {
 }
 
 /**
- * Get the spelling of a cursor
+ * Get the spelling (name) of a cursor
+ *
+ * @param cursor - The cursor to get the spelling from
+ * @returns The spelling string of the cursor (e.g., function name, type name)
  */
 export function getCursorSpelling(cursor: CXCursor): string {
   const sym = getSymbols();
@@ -45,6 +51,9 @@ export function getCursorSpelling(cursor: CXCursor): string {
  *
  * This function works with the raw cursor buffers returned by visitChildren,
  * avoiding the need to construct a CXCursor object.
+ *
+ * @param buffer - The Uint8Array buffer containing the raw cursor data
+ * @returns The spelling string of the cursor
  */
 export function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
   const sym = getSymbols();
@@ -60,6 +69,11 @@ export function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
 
 /**
  * Get the display name of a cursor
+ *
+ * The display name includes additional context like parameter types for functions.
+ *
+ * @param cursor - The cursor to get the display name from
+ * @returns The display name string (e.g., "void foo(int, int)" for a function)
  */
 export function getCursorDisplayName(cursor: CXCursor): string {
   const sym = getSymbols();
@@ -71,7 +85,10 @@ export function getCursorDisplayName(cursor: CXCursor): string {
 }
 
 /**
- * Get the location of a cursor
+ * Get the location of a cursor in the source code
+ *
+ * @param cursor - The cursor to get the location from
+ * @returns SourceLocation containing file, line, column, and offset
  */
 export function getCursorLocation(cursor: CXCursor): SourceLocation {
   const sym = getSymbols();
@@ -80,7 +97,10 @@ export function getCursorLocation(cursor: CXCursor): SourceLocation {
 }
 
 /**
- * Get the extent of a cursor
+ * Get the extent (source range) of a cursor
+ *
+ * @param cursor - The cursor to get the extent from
+ * @returns SourceRange containing start and end locations
  */
 export function getCursorExtent(cursor: CXCursor): SourceRange {
   const sym = getSymbols();
@@ -91,8 +111,8 @@ export function getCursorExtent(cursor: CXCursor): SourceRange {
 /**
  * Visit all children of a cursor
  *
- * @param cursor - The parent cursor (CXCursor or buffer)
- * @param visitor - Callback function for each child
+ * @param cursor - The parent cursor (CXCursor or Uint8Array buffer from visitChildren)
+ * @param visitor - Callback function called for each child cursor
  * @returns Array of child cursor buffers (Uint8Array) that can be passed to FFI functions
  */
 export function visitChildren(
@@ -228,7 +248,10 @@ function createVisitorCallback(): Deno.PointerValue {
 }
 
 /**
- * Get the kind name for a cursor kind
+ * Get the spelling (name) of a cursor kind
+ *
+ * @param kind - The CXCursorKind to get the spelling for
+ * @returns The string name of the cursor kind (e.g., "StructDecl", "FunctionDecl")
  */
 export function getCursorKindSpelling(kind: CXCursorKind): string {
   const sym = getSymbols();
@@ -241,6 +264,9 @@ export function getCursorKindSpelling(kind: CXCursorKind): string {
 
 /**
  * Get the availability of a cursor
+ *
+ * @param cursor - The cursor to check availability for
+ * @returns CXAvailabilityKind value (0=Available, 1=Deprecated, 2=NotAvailable, 3=NotAccessible)
  */
 export function getCursorAvailability(cursor: CXCursor): number {
   const sym = getSymbols();
@@ -249,6 +275,11 @@ export function getCursorAvailability(cursor: CXCursor): number {
 
 /**
  * Get the cursor that a cursor refers to
+ *
+ * For example, for a reference to a variable, returns the declaration of that variable.
+ *
+ * @param cursor - The cursor to get the referenced cursor from
+ * @returns The referenced CXCursor, or a null cursor if not available
  */
 export function getCursorReferenced(cursor: CXCursor): CXCursor {
   const sym = getSymbols();
@@ -257,6 +288,11 @@ export function getCursorReferenced(cursor: CXCursor): CXCursor {
 
 /**
  * Get the definition of a cursor
+ *
+ * Returns the definition of the entity that this cursor refers to.
+ *
+ * @param cursor - The cursor to get the definition from
+ * @returns The defining CXCursor, or a null cursor if no definition is available
  */
 export function getCursorDefinition(cursor: CXCursor): CXCursor {
   const sym = getSymbols();

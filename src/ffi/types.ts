@@ -5,6 +5,8 @@
  */
 
 // Use Deno's native pointer type
+
+/** Native pointer type representing a memory address */
 export type NativePointer = Deno.PointerValue;
 
 // ============================================================================
@@ -98,6 +100,9 @@ export interface CXUnsavedFile {
 // Cursor Kinds (enum CXCursorKind)
 // ============================================================================
 
+/**
+ * Cursor kinds representing different types of AST nodes
+ */
 export enum CXCursorKind {
   // LLVM 20 has shifted enum values
   UnexposedDecl = 1,
@@ -175,6 +180,9 @@ export enum CXCursorKind {
 // Type Kinds (enum CXTypeKind)
 // ============================================================================
 
+/**
+ * Type kinds representing different types in the Clang type system
+ */
 export enum CXTypeKind {
   Invalid = 0,
   Unexposed = 1,
@@ -244,6 +252,9 @@ export enum CXTypeKind {
 // Error Codes (enum CXErrorCode)
 // ============================================================================
 
+/**
+ * Error codes returned by libclang functions
+ */
 export enum CXErrorCode {
   Success = 0,
   Failure = 1,
@@ -256,6 +267,9 @@ export enum CXErrorCode {
 // Availability Kinds (enum CXAvailabilityKind)
 // ============================================================================
 
+/**
+ * Availability kinds indicating the availability of a declaration
+ */
 export enum CXAvailabilityKind {
   Available = 0,
   Deprecated = 1,
@@ -267,6 +281,9 @@ export enum CXAvailabilityKind {
 // Translation Unit Flags
 // ============================================================================
 
+/**
+ * Flags controlling translation unit parsing
+ */
 export enum CXTranslationUnit_Flags {
   /** None */
   None = 0,
@@ -300,6 +317,9 @@ export enum CXTranslationUnit_Flags {
 // Cursor Visitor Result
 // ============================================================================
 
+/**
+ * Return values for cursor visitor callbacks
+ */
 export enum CXChildVisitResult {
   /** Continue traversing */
   Continue = 0,
@@ -313,15 +333,27 @@ export enum CXChildVisitResult {
 // Source Location Helpers
 // ============================================================================
 
+/**
+ * Represents a location in source code
+ */
 export interface SourceLocation {
+  /** The file path, or null if not available */
   file: string | null;
+  /** The line number (1-based) */
   line: number;
+  /** The column number (1-based) */
   column: number;
+  /** The character offset from the start of the file */
   offset: number;
 }
 
+/**
+ * Represents a range in source code
+ */
 export interface SourceRange {
+  /** The starting location */
   start: SourceLocation;
+  /** The ending location */
   end: SourceLocation;
 }
 
@@ -329,8 +361,13 @@ export interface SourceRange {
 // Parse Result
 // ============================================================================
 
+/**
+ * Result of parsing a translation unit
+ */
 export interface ParseResult {
+  /** The parsed translation unit, or null if parsing failed */
   translationUnit: CXTranslationUnit | null;
+  /** Error message if parsing failed */
   error?: string;
 }
 
@@ -338,9 +375,15 @@ export interface ParseResult {
 // Diagnostic
 // ============================================================================
 
+/**
+ * Represents a diagnostic message (error, warning, or note)
+ */
 export interface Diagnostic {
+  /** The severity level of the diagnostic */
   severity: CXDiagnosticSeverity;
+  /** The diagnostic message */
   message: string;
+  /** The source location of the diagnostic */
   location: SourceLocation;
 }
 
@@ -358,6 +401,11 @@ export type CursorVisitor = (
 // Native Function Types (for FFI)
 // ============================================================================
 
+/**
+ * Interface containing all libclang FFI function symbols
+ *
+ * These functions are dynamically loaded from the libclang shared library.
+ */
 export interface LibclangSymbols {
   // Index functions
   clang_createIndex: (

@@ -148,7 +148,11 @@ export function getValueType(type: CXType | Uint8Array): CXType {
 
 /**
  * Get the kind of a type
- * In LLVM 20+, the kind is directly accessible from the CXType struct
+ *
+ * In LLVM 20+, the kind is directly accessible from the CXType struct.
+ *
+ * @param type - The CXType to get the kind from
+ * @returns The CXTypeKind value identifying the type
  */
 export function getTypeKind(type: CXType): CXTypeKind {
   // In LLVM 20+, clang_getTypeKind was removed and kind is now the first field of CXType
@@ -156,9 +160,10 @@ export function getTypeKind(type: CXType): CXTypeKind {
 }
 
 /**
- * Get the spelling of a type
+ * Get the spelling (string representation) of a type
  *
  * @param type - CXType or Uint8Array buffer
+ * @returns The type spelling string (e.g., "int", "const char*")
  */
 export function getTypeSpelling(type: CXType | Uint8Array): string {
   const sym = getSymbols();
@@ -366,7 +371,10 @@ export function getPointeeType(type: CXType | Uint8Array): CXType {
 }
 
 /**
- * Get the kind name for a type kind
+ * Get the spelling (name) of a type kind
+ *
+ * @param kind - The CXTypeKind to get the spelling for
+ * @returns The string name of the type kind (e.g., "Int", "Pointer", "Struct")
  */
 export function getTypeKindSpelling(kind: CXTypeKind): string {
   const sym = getSymbols();
