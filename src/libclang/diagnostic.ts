@@ -9,7 +9,7 @@ import type {
   Diagnostic,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
-import { parseSourceLocation } from "./helpers.ts";
+import { cxStringToString, parseSourceLocation } from "./helpers.ts";
 
 /**
  * Get the number of diagnostics in a translation unit
@@ -69,10 +69,7 @@ export function getDiagnosticSeverity(
 export function getDiagnosticSpelling(diagnostic: CXDiagnostic): string {
   const sym = getSymbols();
   const cxString = sym.clang_getDiagnosticSpelling(diagnostic);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**

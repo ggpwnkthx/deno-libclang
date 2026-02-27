@@ -3,13 +3,59 @@
  */
 
 import type {
+  CXCursor,
   CXFile,
   CXSourceLocation,
   CXSourceRange,
+  CXString,
+  CXType,
   SourceLocation,
   SourceRange,
 } from "../ffi/types.ts";
+import { getSymbols } from "./library.ts";
 import { getFileName } from "./file.ts";
+
+/**
+ * Convert a CXString to a JavaScript string
+ *
+ * This is the common pattern for extracting strings from libclang CXString returns.
+ *
+ * @param cxString - The CXString to convert
+ * @returns The JavaScript string
+ */
+export function cxStringToString(cxString: CXString): string {
+  const sym = getSymbols();
+  const cStr = sym.clang_getCString(cxString);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cxString);
+  return result;
+}
+
+/**
+ * Convert CXCursor from either a native CXCursor object or Uint8Array buffer
+ *
+ * When visiting children, libclang returns cursor data as a buffer that needs
+ * to be passed to FFI functions. This helper normalizes both input types.
+ *
+ * @param cursor - CXCursor object or Uint8Array buffer
+ * @returns The CXCursor in native form
+ */
+export function toNativeCursor(cursor: CXCursor | Uint8Array): CXCursor {
+  return cursor instanceof Uint8Array ? cursor as unknown as CXCursor : cursor;
+}
+
+/**
+ * Convert CXType from either a native CXType object or Uint8Array buffer
+ *
+ * When working with types, libclang may return type data as a buffer that needs
+ * to be passed to FFI functions. This helper normalizes both input types.
+ *
+ * @param type - CXType object or Uint8Array buffer
+ * @returns The CXType in native form
+ */
+export function toNativeType(type: CXType | Uint8Array): CXType {
+  return type instanceof Uint8Array ? type as unknown as CXType : type;
+}
 
 /**
  * Parse a CXSourceLocation into a SourceLocation

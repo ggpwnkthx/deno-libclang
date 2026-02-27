@@ -44,6 +44,7 @@ export {
   getCursorType,
   getNumArgTypes,
   getPointeeType,
+  getPointerDepth,
   getResultType,
   getTypeAlignment,
   getTypedefUnderlyingType,
@@ -52,6 +53,10 @@ export {
   getTypeSize,
   getTypeSpelling,
   getValueType,
+  isCharPointerType,
+  isVoidPointerType,
+  type NativeType,
+  typeKindToFFI,
 } from "./libclang/type.ts";
 
 // Diagnostic functions
@@ -73,7 +78,12 @@ export {
 } from "./libclang/file.ts";
 
 // Native cursor wrapper
-export { NativeCXCursor } from "./libclang/native_cursor.ts";
+export {
+  CURSOR_VIEW_SIZE,
+  getCursorKindFromBuffer,
+  NativeCXCursor,
+  toCursor,
+} from "./libclang/native_cursor.ts";
 
 // Re-export types
 export type {

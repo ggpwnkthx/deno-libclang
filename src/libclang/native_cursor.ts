@@ -8,7 +8,33 @@
  * directly passed to FFI functions without needing to construct a full CXCursor object.
  */
 
-import type { CXCursor, NativePointer } from "../ffi/types.ts";
+import type { CXCursor, CXCursorKind, NativePointer } from "../ffi/types.ts";
+
+/**
+ * Size of the CXCursor DataView for extracting cursor kind
+ */
+export const CURSOR_VIEW_SIZE = 40;
+
+/**
+ * Extract cursor kind from a buffer using DataView
+ *
+ * @param buffer - The Uint8Array buffer containing the native CXCursor data
+ * @returns The CXCursorKind value
+ */
+export function getCursorKindFromBuffer(buffer: Uint8Array): CXCursorKind {
+  const view = new DataView(buffer.buffer, buffer.byteOffset, CURSOR_VIEW_SIZE);
+  return view.getUint32(0, true) as CXCursorKind;
+}
+
+/**
+ * Convert buffer to CXCursor type for use with libclang functions
+ *
+ * @param buffer - The Uint8Array buffer containing the native CXCursor data
+ * @returns The buffer cast as CXCursor
+ */
+export function toCursor(buffer: Uint8Array): CXCursor {
+  return buffer as unknown as CXCursor;
+}
 
 /**
  * Native buffer-based CXCursor that can be passed to FFI functions

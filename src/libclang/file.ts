@@ -9,6 +9,7 @@ import type {
   NativePointer,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
+import { cxStringToString } from "./helpers.ts";
 
 /**
  * Get a file from a translation unit
@@ -34,10 +35,7 @@ export function getFile(unit: CXTranslationUnit, fileName: string): CXFile {
 export function getFileName(file: CXFile): string {
   const sym = getSymbols();
   const cxString = sym.clang_getFileName(file);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**

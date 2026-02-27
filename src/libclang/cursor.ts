@@ -17,7 +17,12 @@ import {
   setVisitor,
 } from "../ffi/state.ts";
 import { getSymbols } from "./library.ts";
-import { parseSourceLocation, parseSourceRange } from "./helpers.ts";
+import {
+  cxStringToString,
+  parseSourceLocation,
+  parseSourceRange,
+  toNativeCursor,
+} from "./helpers.ts";
 import { NativeCXCursor } from "./native_cursor.ts";
 
 /**
@@ -40,10 +45,7 @@ export function getCursorKind(cursor: CXCursor): CXCursorKind {
 export function getCursorSpelling(cursor: CXCursor): string {
   const sym = getSymbols();
   const cxString = sym.clang_getCursorSpelling(cursor);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**
@@ -57,14 +59,10 @@ export function getCursorSpelling(cursor: CXCursor): string {
  */
 export function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
   const sym = getSymbols();
-  // Pass the buffer directly as the CXCursor struct - use type assertion
   const cxString = sym.clang_getCursorSpelling(
     buffer as unknown as CXCursor,
   );
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**
@@ -78,10 +76,7 @@ export function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
 export function getCursorDisplayName(cursor: CXCursor): string {
   const sym = getSymbols();
   const cxString = sym.clang_getCursorDisplayName(cursor);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**
@@ -94,10 +89,7 @@ export function getCursorLocation(
   cursor: CXCursor | Uint8Array,
 ): SourceLocation {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  const location = sym.clang_getCursorLocation(cursorArg);
+  const location = sym.clang_getCursorLocation(toNativeCursor(cursor));
   return parseSourceLocation(location);
 }
 
@@ -109,10 +101,7 @@ export function getCursorLocation(
  */
 export function getCursorExtent(cursor: CXCursor | Uint8Array): SourceRange {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  const range = sym.clang_getCursorExtent(cursorArg);
+  const range = sym.clang_getCursorExtent(toNativeCursor(cursor));
   return parseSourceRange(range);
 }
 
@@ -129,11 +118,6 @@ export function visitChildren(
 ): Uint8Array[] {
   const sym = getSymbols();
 
-  // Convert CXCursor to buffer if needed
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-
   // Set the visitor function in global state
   setVisitor(visitor);
 
@@ -141,7 +125,7 @@ export function visitChildren(
   const visitorPtr = createVisitorCallback();
 
   sym.clang_visitChildren(
-    cursorArg,
+    toNativeCursor(cursor),
     visitorPtr,
     null as unknown as Deno.PointerValue,
   );
@@ -264,10 +248,7 @@ function createVisitorCallback(): Deno.PointerValue {
 export function getCursorKindSpelling(kind: CXCursorKind): string {
   const sym = getSymbols();
   const cxString = sym.clang_getCursorKindSpelling(kind as number);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  return cxStringToString(cxString);
 }
 
 /**
@@ -278,10 +259,7 @@ export function getCursorKindSpelling(kind: CXCursorKind): string {
  */
 export function getCursorAvailability(cursor: CXCursor | Uint8Array): number {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  return sym.clang_getCursorAvailability(cursorArg);
+  return sym.clang_getCursorAvailability(toNativeCursor(cursor));
 }
 
 /**
@@ -294,10 +272,7 @@ export function getCursorAvailability(cursor: CXCursor | Uint8Array): number {
  */
 export function getCursorReferenced(cursor: CXCursor | Uint8Array): CXCursor {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  return sym.clang_getCursorReferenced(cursorArg);
+  return sym.clang_getCursorReferenced(toNativeCursor(cursor));
 }
 
 /**
@@ -310,10 +285,7 @@ export function getCursorReferenced(cursor: CXCursor | Uint8Array): CXCursor {
  */
 export function getCursorDefinition(cursor: CXCursor | Uint8Array): CXCursor {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  return sym.clang_getCursorDefinition(cursorArg);
+  return sym.clang_getCursorDefinition(toNativeCursor(cursor));
 }
 
 /**
@@ -326,10 +298,7 @@ export function getEnumConstantDeclValue(
   cursor: CXCursor | Uint8Array,
 ): bigint {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  return sym.clang_getEnumConstantDeclValue(cursorArg);
+  return sym.clang_getEnumConstantDeclValue(toNativeCursor(cursor));
 }
 
 /**
@@ -342,10 +311,7 @@ export function getEnumConstantDeclUnsignedValue(
   cursor: CXCursor | Uint8Array,
 ): bigint {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  return sym.clang_getEnumConstantDeclUnsignedValue(cursorArg);
+  return sym.clang_getEnumConstantDeclUnsignedValue(toNativeCursor(cursor));
 }
 
 /**
@@ -360,12 +326,6 @@ export function getEnumConstantDeclUnsignedValue(
  */
 export function getCursorUSR(cursor: CXCursor | Uint8Array): string {
   const sym = getSymbols();
-  const cursorArg = cursor instanceof Uint8Array
-    ? cursor as unknown as CXCursor
-    : cursor;
-  const cxString = sym.clang_getCursorUSR(cursorArg);
-  const cStr = sym.clang_getCString(cxString);
-  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
-  sym.clang_disposeString(cxString);
-  return result;
+  const cxString = sym.clang_getCursorUSR(toNativeCursor(cursor));
+  return cxStringToString(cxString);
 }
