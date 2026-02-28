@@ -1019,3 +1019,48 @@ Deno.test({
     }
   },
 });
+
+Deno.test({
+  name: "type - typeKindToFFI with uint types",
+  async fn() {
+    // Import typeKindToFFI directly from the module
+    const { typeKindToFFI, CXTypeKind } = await import("../mod.ts");
+
+    // Test case 1: SChar with uint8_t spelling (the bug case)
+    // This simulates libclang misreporting uint8_t as SChar
+    const result1 = typeKindToFFI(CXTypeKind.SChar, "uint8_t");
+    assertEquals(result1, "u8", "SChar with uint8_t spelling should return u8");
+
+    // Test case 2: SChar with regular signed char spelling
+    const result2 = typeKindToFFI(CXTypeKind.SChar, "signed char");
+    assertEquals(result2, "i8", "SChar with signed char spelling should return i8");
+
+    // Test case 3: Short with uint16_t spelling (the bug case)
+    const result3 = typeKindToFFI(CXTypeKind.Short, "uint16_t");
+    assertEquals(result3, "u16", "Short with uint16_t spelling should return u16");
+
+    // Test case 4: Short with regular short spelling
+    const result4 = typeKindToFFI(CXTypeKind.Short, "short");
+    assertEquals(result4, "i16", "Short with short spelling should return i16");
+
+    // Test case 5: Int with uint32_t spelling (the bug case)
+    const result5 = typeKindToFFI(CXTypeKind.Int, "uint32_t");
+    assertEquals(result5, "u32", "Int with uint32_t spelling should return u32");
+
+    // Test case 6: Int with regular int spelling
+    const result6 = typeKindToFFI(CXTypeKind.Int, "int");
+    assertEquals(result6, "i32", "Int with int spelling should return i32");
+
+    // Test case 7: UChar should still work correctly
+    const result7 = typeKindToFFI(CXTypeKind.UChar, "unsigned char");
+    assertEquals(result7, "u8", "UChar should return u8");
+
+    // Test case 8: UShort should still work correctly
+    const result8 = typeKindToFFI(CXTypeKind.UShort, "unsigned short");
+    assertEquals(result8, "u16", "UShort should return u16");
+
+    // Test case 9: UInt should still work correctly
+    const result9 = typeKindToFFI(CXTypeKind.UInt, "unsigned int");
+    assertEquals(result9, "u32", "UInt should return u32");
+  },
+});

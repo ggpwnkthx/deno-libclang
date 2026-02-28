@@ -337,14 +337,20 @@ export function typeKindToFFI(
     case CXTypeKind.Char_S:
       return "u8";
     case CXTypeKind.SChar:
+      // Check spelling for unsigned variants (libclang sometimes misreports uint8_t as SChar)
+      if (typeSpelling.toLowerCase().includes("uint8")) return "u8";
       return "i8";
     case CXTypeKind.UChar:
       return "u8";
     case CXTypeKind.Short:
+      // Check spelling for unsigned variants (libclang sometimes misreports uint16_t as Short)
+      if (typeSpelling.toLowerCase().includes("uint16")) return "u16";
       return "i16";
     case CXTypeKind.UShort:
       return "u16";
     case CXTypeKind.Int:
+      // Check spelling for unsigned variants (libclang sometimes misreports uint32_t as Int)
+      if (typeSpelling.toLowerCase().includes("uint32")) return "u32";
       return "i32";
     case CXTypeKind.UInt:
       return "u32";
