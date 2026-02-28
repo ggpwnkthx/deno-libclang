@@ -381,15 +381,16 @@ export function typeKindToFFI(
       // Elaborated types - need to resolve to underlying type
       // For now, try to infer from spelling
       const spelling = typeSpelling.toLowerCase();
-      if (spelling.includes("int8") || spelling.includes("int8_t")) return "i8";
+      // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
       if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
         return "u8";
       }
-      if (spelling.includes("int16") || spelling.includes("int16_t")) {
-        return "i16";
-      }
+      if (spelling.includes("int8") || spelling.includes("int8_t")) return "i8";
       if (spelling.includes("uint16") || spelling.includes("uint16_t")) {
         return "u16";
+      }
+      if (spelling.includes("int16") || spelling.includes("int16_t")) {
+        return "i16";
       }
       // Check unsigned before signed to avoid substring match issues
       if (spelling.includes("uint64") || spelling.includes("uint64_t")) {
@@ -418,6 +419,10 @@ export function typeKindToFFI(
     default: {
       // Try to infer from spelling
       const spelling = typeSpelling.toLowerCase();
+      // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
+      if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
+        return "u8";
+      }
       if (spelling.includes("int8") || spelling.includes("int8_t")) return "i8";
       if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
         return "u8";
