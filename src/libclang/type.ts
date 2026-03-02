@@ -83,6 +83,9 @@ export function parseCXTypeFromBuffer(buffer: Uint8Array): CXType {
  * @returns CXType
  */
 export function getCursorType(cursor: CXCursor | Uint8Array): CXType {
+  if (cursor == null) {
+    throw new Error("cursor cannot be null or undefined");
+  }
   const sym = getSymbols();
   const result = sym.clang_getCursorType(toNativeCursor(cursor));
   return parseCXTypeResult(result);
@@ -99,6 +102,9 @@ export function getCursorType(cursor: CXCursor | Uint8Array): CXType {
 export function getTypedefUnderlyingType(
   cursor: CXCursor | Uint8Array,
 ): CXType {
+  if (cursor == null) {
+    throw new Error("cursor cannot be null or undefined");
+  }
   const sym = getSymbols();
   const result = sym.clang_getTypedefDeclUnderlyingType(toNativeCursor(cursor));
   return parseCXTypeResult(result);
@@ -114,6 +120,9 @@ export function getTypedefUnderlyingType(
  * @returns CXType of the value type, or an invalid type if not atomic
  */
 export function getAtomicValueType(type: CXType | Uint8Array): CXType {
+  if (type == null) {
+    throw new Error("type cannot be null or undefined");
+  }
   const sym = getSymbols();
   const typeArg = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
   const result = sym.clang_Type_getValueType(typeArg as unknown as CXType);
@@ -130,6 +139,9 @@ export function getAtomicValueType(type: CXType | Uint8Array): CXType {
  * @returns CXType of the named type
  */
 export function getNamedType(type: CXType | Uint8Array): CXType {
+  if (type == null) {
+    throw new Error("type cannot be null or undefined");
+  }
   const sym = getSymbols();
   const typeArg = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
   const result = sym.clang_Type_getNamedType(typeArg as unknown as CXType);

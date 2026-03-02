@@ -175,8 +175,9 @@ export function findLocalLibclang(): string | null {
     ];
 
     for (const base of [programFiles, programFilesX86, localAppData]) {
+      // Try unversioned path first (only once per base, not per version)
+      possiblePaths.push(`${base}\\LLVM\\lib\\${libName}`);
       for (const ver of versions) {
-        possiblePaths.push(`${base}\\LLVM\\lib\\${libName}`);
         possiblePaths.push(`${base}\\LLVM-${ver}\\bin\\${libName}`);
       }
     }

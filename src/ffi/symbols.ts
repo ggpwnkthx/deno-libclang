@@ -62,7 +62,7 @@ export function getLibclangSymbols(): LibclangSymbols {
     } as unknown as LibclangSymbols["clang_getCursorKindSpelling"],
     clang_getCursorLocation: {
       parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
-      result: { struct: ["pointer", "pointer", "u32", "u32"] },
+      result: { struct: ["pointer", "pointer", "u32"] }, // CXSourceLocation: 2 pointers + u32
     } as unknown as LibclangSymbols["clang_getCursorLocation"],
     clang_getCursorExtent: {
       parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
@@ -162,16 +162,16 @@ export function getLibclangSymbols(): LibclangSymbols {
     } as unknown as LibclangSymbols["clang_getFile"],
     clang_getLocation: {
       parameters: ["pointer", "pointer", "u32", "u32"],
-      result: { struct: ["pointer", "pointer", "u32", "u32"] },
+      result: { struct: ["pointer", "pointer", "u32"] }, // CXSourceLocation: 2 pointers + u32
     } as unknown as LibclangSymbols["clang_getLocation"],
     clang_getRangeStart: {
       parameters: [{ struct: ["pointer", "pointer", "u32", "u32"] }],
-      // CXSourceRange returns CXSourceLocation (2 pointers + u32)
+      // Takes CXSourceRange, returns CXSourceLocation (2 pointers + u32)
       result: { struct: ["pointer", "pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getRangeStart"],
     clang_getRangeEnd: {
       parameters: [{ struct: ["pointer", "pointer", "u32", "u32"] }],
-      // CXSourceRange returns CXSourceLocation (2 pointers + u32)
+      // Takes CXSourceRange, returns CXSourceLocation (2 pointers + u32)
       result: { struct: ["pointer", "pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getRangeEnd"],
     clang_getFileName: {
@@ -263,7 +263,7 @@ export function getLibclangSymbols(): LibclangSymbols {
     //   CXFile *file, unsigned *line, unsigned *column, unsigned *offset);
     clang_getInstantiationLocation: {
       parameters: [
-        { struct: ["pointer", "pointer", "u32", "u32"] }, // location (with padding)
+        { struct: ["pointer", "pointer", "u32"] }, // location (CXSourceLocation: 2 pointers + u32)
         "pointer", // file output
         "pointer", // line output
         "pointer", // column output
@@ -273,7 +273,7 @@ export function getLibclangSymbols(): LibclangSymbols {
     } as unknown as LibclangSymbols["clang_getInstantiationLocation"],
     clang_getDiagnosticLocation: {
       parameters: ["pointer"],
-      result: { struct: ["pointer", "pointer", "u32", "u32"] },
+      result: { struct: ["pointer", "pointer", "u32"] }, // CXSourceLocation: 2 pointers + u32
     } as unknown as LibclangSymbols["clang_getDiagnosticLocation"],
 
     // Type size and alignment

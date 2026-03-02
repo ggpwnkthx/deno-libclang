@@ -235,13 +235,12 @@ function createVisitorCallback(): Deno.PointerValue {
         // Collect the native buffer for later retrieval (can be passed to FFI)
         addCollectedCursorBuffer(cursorBuffer);
 
-        // Deno FFI inverts callback return values: native = 1 - jsReturn
-        // Encode the desired libclang value (Break=0, Continue=1, Recurse=2)
-        // to the JS return value that yields it after inversion.
+        // Return the visitor result directly - CXChildVisitResult values
+        // (Break=0, Continue=1, Recurse=2) are passed through to native code.
         return result;
       }
 
-      // If no visitor, encode Continue so Deno inversion yields Continue (1)
+      // If no visitor, return Continue to continue traversal
       return CXChildVisitResult.Continue;
     },
   );

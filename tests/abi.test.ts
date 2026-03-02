@@ -18,7 +18,6 @@ import {
 import {
   createIndex,
   CXChildVisitResult,
-  CXCursorKind,
   disposeIndex,
   disposeTranslationUnit,
   getCursorKind,
@@ -99,6 +98,7 @@ Deno.test("Unsigned long CXUnsavedFile struct size", () => {
   // = POINTER_SIZE + POINTER_SIZE + ULONG_SIZE
   const expectedSize = POINTER_SIZE * 2 + ULONG_SIZE;
   assertEquals(typeof expectedSize, "number");
+  assertEquals(expectedSize > 0, true);
   // On 64-bit Windows: 8 + 8 + 4 = 20
   // On 64-bit Unix: 8 + 8 + 8 = 24
   // On 32-bit: 4 + 4 + 4 = 12

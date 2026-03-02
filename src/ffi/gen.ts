@@ -167,23 +167,50 @@ function lowerTypeToFFI(
       return "void";
     case CXTypeKind.Bool:
     case CXTypeKind.Char_U:
-    case CXTypeKind.Char_S:
       return "u8";
-    case CXTypeKind.SChar:
+    case CXTypeKind.Char_S:
+      // On Windows, char is unsigned (u8). On Unix, it's signed (i8).
+      return Deno.build.os === "windows" ? "u8" : "i8";
+    case CXTypeKind.SChar: {
+      // Get type spelling to check for unsigned variants
+      // (libclang sometimes misreports uint8_t as SChar)
+      const typeSpelling = type instanceof Uint8Array
+        ? getTypeSpelling(type).toLowerCase()
+        : "";
+      if (/\buint8(_t)?\b/.test(typeSpelling)) return "u8";
       return "i8";
+    }
     case CXTypeKind.UChar:
       return "u8";
-    case CXTypeKind.Short:
+    case CXTypeKind.Short: {
+      // Get type spelling to check for unsigned variants
+      // (libclang sometimes misreports uint16_t as Short)
+      const typeSpelling = type instanceof Uint8Array
+        ? getTypeSpelling(type).toLowerCase()
+        : "";
+      if (/\buint16(_t)?\b/.test(typeSpelling)) return "u16";
       return "i16";
+    }
     case CXTypeKind.UShort:
       return "u16";
-    case CXTypeKind.Int:
+    case CXTypeKind.Int: {
+      // Get type spelling to check for unsigned variants
+      // (libclang sometimes misreports uint32_t as Int)
+      const typeSpelling = type instanceof Uint8Array
+        ? getTypeSpelling(type).toLowerCase()
+        : "";
+      if (/\buint32(_t)?\b/.test(typeSpelling)) return "u32";
       return "i32";
+    }
     case CXTypeKind.UInt:
       return "u32";
     case CXTypeKind.Long:
+      // Windows LLP64: long is always 32-bit even on x86_64
+      if (Deno.build.os === "windows") return "i32";
       return is64BitPlatform() ? "i64" : "i32";
     case CXTypeKind.ULong:
+      // Windows LLP64: unsigned long is always 32-bit even on x86_64
+      if (Deno.build.os === "windows") return "u32";
       return is64BitPlatform() ? "u64" : "u32";
     case CXTypeKind.LongLong:
       return "i64";
@@ -194,9 +221,7 @@ function lowerTypeToFFI(
     case CXTypeKind.Double:
       return "f64";
     case CXTypeKind.Pointer: {
-      const pointee = type instanceof Uint8Array
-        ? getPointeeType(type)
-        : getPointeeType(type);
+      const pointee = getPointeeType(type);
       const pointeeKind = pointee instanceof Uint8Array
         ? getTypeKindFromBuffer(pointee)
         : getTypeKind(pointee);

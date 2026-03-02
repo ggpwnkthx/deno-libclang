@@ -83,8 +83,8 @@ const loadMutex = {
  * Load the libclang library with mutex for concurrency safety.
  * Use this instead of direct load() in parallel tests.
  */
-export function setupLib(): void {
-  load();
+export async function setupLib(): Promise<void> {
+  await loadMutex.acquire();
 }
 
 /**
@@ -94,9 +94,10 @@ export function setupLib(): void {
 export function requireLibclang(): void {
   try {
     load();
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     throw new Error(
-      "libclang not installed - install libclang-dev or equivalent",
+      `libclang not installed - install libclang-dev or equivalent: ${msg}`,
     );
   }
 }

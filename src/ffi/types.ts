@@ -115,7 +115,7 @@ export enum CXCursorKind {
   FunctionDecl = 8,
   VarDecl = 9,
   ParmDecl = 10,
-  ArgDecl = 10,
+  // ArgDecl doesn't exist in libclang v20 - removed duplicate
   // In LLVM 20, TypedefDecl = 20
   TypedefDecl = 20,
   ObjCInterfaceDecl = 12,
@@ -125,8 +125,8 @@ export enum CXCursorKind {
   ObjCIvarDecl = 16,
   ObjCInstanceMethodDecl = 17,
   ObjCClassMethodDecl = 18,
-  ObjCImplementationDecl = 19,
-  ObjCCategoryImplDecl = 20,
+  ObjCImplementationDecl = 18,
+  ObjCCategoryImplDecl = 19,
   // C++ declarations
   NamespaceDecl = 22,
   NamespaceAliasDecl = 23,
@@ -138,16 +138,16 @@ export enum CXCursorKind {
   CXXOperatorCallExpr = 47,
   CXXMemberCallExpr = 48,
   // Note: CXXCallExpr alias handled below
-  CXXNewExpr = 53,
-  CXXDeleteExpr = 54,
-  CXXThisExpr = 55,
-  CXXNullPtrLiteralExpr = 56,
+  CXXNewExpr = 134,
+  CXXDeleteExpr = 135,
+  CXXThisExpr = 132,
+  CXXNullPtrLiteralExpr = 131,
   CXXBoolLiteralExpr = 57,
   CXXStdInitializerListExpr = 58,
-  CXXCatchStmt = 65,
-  CXXTryStmt = 66,
-  CXXThrowExpr = 67,
-  CXXTryOrCatchStmt = 66,
+  CXXCatchStmt = 223,
+  CXXTryStmt = 224,
+  CXXThrowExpr = 133,
+  // CXXTryOrCatchStmt doesn't exist in libclang v20 - removed duplicate
   CXXTypeRefExpr = 200,
   TemplateRef = 41,
   NamespaceAliasRef = 42,
@@ -166,9 +166,8 @@ export enum CXCursorKind {
   FileScopeAssmt = 60,
   StaticAssertDecl = 61,
   Attr = 62,
-  // Expressions
-  ThisExpr = 55,
-  ExpressionStmt = 60,
+  // ThisExpr doesn't exist in libclang v20 - removed (use CXXThisExpr for C++)
+  // ExpressionStmt - removed duplicate (use CompoundStmt)
   FloatingLiteral = 61,
   ImagLiteral = 62,
   PredefinedExpr = 63,
@@ -205,9 +204,9 @@ export enum CXCursorKind {
   DeclRefExpr = 120,
   MemberRefExpr = 126,
   ArraySubscriptExpr = 129,
-  InitListExpr = 130,
-  StmtExpr = 131,
-  CastExpr = 132,
+  InitListExpr = 119,
+  // CastExpr doesn't exist in libclang v20 - use CStyleCastExpr
+  CStyleCastExpr = 117,
   BinaryConditionalOperator = 133,
   OffsetOfExpr = 134,
   UnaryExpr = 135,

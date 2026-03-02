@@ -9,7 +9,6 @@ import type {
   CXSourceRange,
   CXString,
   CXType,
-  NativePointer,
   SourceLocation,
   SourceRange,
 } from "../ffi/types.ts";
@@ -75,7 +74,6 @@ export function parseSourceLocation(
   // Prepare location in the format expected by clang_getSpellingLocation
   // For CXSourceLocation object, convert to buffer
   let locationBuffer: Uint8Array;
-  const _filePtrVal: NativePointer | null = null;
 
   if (location instanceof Uint8Array) {
     locationBuffer = location;
