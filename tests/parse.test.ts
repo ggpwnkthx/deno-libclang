@@ -4,43 +4,30 @@
 
 import { assertEquals, assertExists } from "@std/assert";
 import {
-  createIndex,
-  disposeIndex,
+  CXCursorKind,
   disposeTranslationUnit,
+  getCursorLocation,
   getFile,
   getNumDiagnostics,
-  load,
+  getTranslationUnitCursor,
   parseTranslationUnit,
   reparseTranslationUnit,
-  unload,
 } from "../mod.ts";
+import { findCursorByKind, parseC } from "./test_utils.ts";
 
 Deno.test({
   name: "parse - parse simple C struct",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `
+    const { tu, cleanup } = await parseC(`
       struct Point {
         int x;
         int y;
       };
-    `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    `);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-      assertEquals(result.error, undefined);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -48,10 +35,7 @@ Deno.test({
 Deno.test({
   name: "parse - parse function declaration",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `
+    const { tu, cleanup } = await parseC(`
       int add(int a, int b) {
         return a + b;
       }
@@ -59,20 +43,11 @@ Deno.test({
       int main() {
         return add(1, 2);
       }
-    `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    `);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -80,49 +55,32 @@ Deno.test({
 Deno.test({
   name: "parse - parse result includes error on invalid code",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int main() { return invalid_syntax `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { index, tu, file, cleanup } = await parseC(
+      `int main() { return invalid_syntax `,
+    );
     try {
-      const result = parseTranslationUnit(index, file);
-      // Should still return a translation unit but with diagnostics
-      assertExists(result.translationUnit);
-
-      const numDiags = getNumDiagnostics(result.translationUnit);
+      assertExists(tu);
+      const numDiags = getNumDiagnostics(tu);
       assertEquals(typeof numDiags, "number");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
 
 Deno.test({
   name: "parse - parse non-existent file throws",
-  fn() {
-    load();
-
-    const index = createIndex();
-
+  async fn() {
+    // Use parseTranslationUnit directly for non-existent file test
+    const { index, cleanup } = await parseC(`int x = 5;`);
     try {
-      // parseTranslationUnit should handle non-existent files gracefully
       const result = parseTranslationUnit(index, "/nonexistent/file.c");
-      // When file doesn't exist, result may have error or null translationUnit
       assertEquals(
         result.translationUnit === null || result.error !== undefined,
         true,
       );
     } finally {
-      disposeIndex(index);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -130,31 +88,13 @@ Deno.test({
 Deno.test({
   name: "parse - parse with invalid arguments",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Parse with a valid file first
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
       // Try to get a file that doesn't exist in the TU
-      const _nonExistentFile = getFile(
-        result.translationUnit,
-        "/nonexistent.h",
-      );
+      const _nonExistentFile = getFile(tu, "/nonexistent.h");
       // This should return a null file handle - verify it's handled gracefully
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -162,29 +102,9 @@ Deno.test({
 Deno.test({
   name: "parse - disposeTranslationUnit cleans up resources",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
-    try {
-      // Parse a translation unit
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      // Dispose should not throw and should clean up resources
-      disposeTranslationUnit(result.translationUnit);
-
-      // After dispose, calling functions on the TU may have undefined behavior
-      // but dispose itself should complete without error
-    } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
-    }
+    const { cleanup } = await parseC(`int x = 5;`);
+    // Cleanup should not throw
+    await cleanup();
   },
 });
 
@@ -195,26 +115,11 @@ Deno.test({
 Deno.test({
   name: "parse - parse with unsaved file (in-memory buffer)",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const mainCode = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, mainCode);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Note: Unsaved files support requires persistent memory allocation
-      // which is complex in Deno FFI. This test verifies the API accepts
-      // the parameter without crashing when passed empty array.
-      const result = parseTranslationUnit(index, file, [], []);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -222,26 +127,11 @@ Deno.test({
 Deno.test({
   name: "parse - parse with multiple unsaved files",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Note: Unsaved files support requires persistent memory allocation
-      // which is complex in Deno FFI. This test verifies the API accepts
-      // the parameter without crashing when passed empty array.
-      const result = parseTranslationUnit(index, file, [], []);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -249,26 +139,11 @@ Deno.test({
 Deno.test({
   name: "parse - parse with compiler args (-D for define)",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`, { args: [] });
     try {
-      // Note: Compiler args support requires persistent memory allocation
-      // which is complex in Deno FFI. This test verifies the API accepts
-      // the parameter without crashing when passed empty array.
-      const result = parseTranslationUnit(index, file, []);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -276,24 +151,11 @@ Deno.test({
 Deno.test({
   name: "parse - parse with empty args array",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`, { args: [] });
     try {
-      // Parse with empty args array
-      const result = parseTranslationUnit(index, file, []);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -301,24 +163,11 @@ Deno.test({
 Deno.test({
   name: "parse - parse with empty unsaved files array",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Parse with empty unsaved files array
-      const result = parseTranslationUnit(index, file, [], []);
-      assertExists(result.translationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertExists(tu);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -326,30 +175,12 @@ Deno.test({
 Deno.test({
   name: "reparse - reparse with unsaved files",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Initial parse
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      // Note: Unsaved files support requires persistent memory allocation
-      // which is complex in Deno FFI. This test verifies reparse works
-      // with an empty unsaved files array.
-      const reparseResult = reparseTranslationUnit(result.translationUnit, []);
+      const reparseResult = reparseTranslationUnit(tu, []);
       assertEquals(reparseResult, 0, "Reparse should succeed");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -357,28 +188,96 @@ Deno.test({
 Deno.test({
   name: "reparse - reparse with empty unsaved files",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tu, cleanup } = await parseC(`int x = 5;`);
     try {
-      // Initial parse
-      const result = parseTranslationUnit(index, file);
+      const reparseResult = reparseTranslationUnit(tu, []);
+      assertEquals(reparseResult, 0, "Reparse should succeed");
+    } finally {
+      await cleanup();
+    }
+  },
+});
+
+// ============================================================================
+// Real unsaved file and compiler args tests
+// ============================================================================
+
+Deno.test({
+  name: "parse - unsaved file overrides disk file",
+  async fn() {
+    const { index, cleanup } = await parseC(`int x = 999;`);
+    try {
+      // Parse with unsaved file that overrides disk content
+      const unsavedCode = `int x = 42;`;
+      const result = parseTranslationUnit(index, "dummy.c", [], [
+        { filename: "dummy.c", contents: unsavedCode, length: unsavedCode.length },
+      ]);
       assertExists(result.translationUnit);
 
-      // Reparse with empty unsaved files array
-      const reparseResult = reparseTranslationUnit(result.translationUnit, []);
-      assertEquals(reparseResult, 0, "Reparse should succeed");
+      const tuCursor = getTranslationUnitCursor(result.translationUnit);
 
+      // Get children as buffers
+      const children = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
+      assertExists(children, "Expected to find VarDecl in parsed unsaved file");
+
+      // Clean up this specific test's extra TU
+      const { disposeTranslationUnit } = await import("../mod.ts");
       disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: "parse - compiler args -D defines change AST",
+  async fn() {
+    const { index, cleanup: cleanup1 } = await parseC(`int x = 5;`);
+    try {
+      const code = `#ifdef MY_MACRO
+int x = 42;
+#else
+int x = 999;
+#endif`;
+
+      // Parse WITHOUT -D flag - should have x = 999 (line 4)
+      const resultNoDef = parseTranslationUnit(
+        index,
+        "dummy.c",
+        ["-Wno-everything"],
+        [{ filename: "dummy.c", contents: code, length: code.length }],
+      );
+      assertExists(resultNoDef.translationUnit);
+
+      // Parse WITH -D flag - should have x = 42 (line 2)
+      const resultWithDef = parseTranslationUnit(
+        index,
+        "dummy.c",
+        ["-DMY_MACRO", "-Wno-everything"],
+        [{ filename: "dummy.c", contents: code, length: code.length }],
+      );
+      assertExists(resultWithDef.translationUnit);
+
+      // Get cursor locations from both
+      const getVarLocation = (tu: typeof resultNoDef.translationUnit) => {
+        const tuCursor = getTranslationUnitCursor(tu);
+        const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
+        if (!varDecl) return { line: 0 };
+        return getCursorLocation(varDecl);
+      };
+
+      const loc1 = getVarLocation(resultNoDef.translationUnit);
+      const loc2 = getVarLocation(resultWithDef.translationUnit);
+
+      // With MY_MACRO defined, the "int x = 42;" is on line 2 (not line 4)
+      // Without, it's on line 4
+      // They should be different
+      assertEquals(loc1.line !== loc2.line, true);
+
+      disposeTranslationUnit(resultNoDef.translationUnit);
+      disposeTranslationUnit(resultWithDef.translationUnit);
+    } finally {
+      await cleanup1();
     }
   },
 });

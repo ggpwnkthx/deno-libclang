@@ -11,6 +11,7 @@ import {
   type ParseResult,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
+import { POINTER_SIZE, ULONG_SIZE, writePtr } from "../utils/ffi.ts";
 
 /**
  * Convert a string array to a native pointer array (for command line args)
@@ -37,8 +38,8 @@ function argsToNativePointer(args: string[]): {
   }
 
   // Create array of pointers to each argument string
-  // Each pointer is 8 bytes on 64-bit systems
-  const ptrArraySize = args.length * 8;
+  // Each pointer is POINTER_SIZE bytes
+  const ptrArraySize = args.length * POINTER_SIZE;
   const ptrArray = new Uint8Array(ptrArraySize);
   _keepAlive.push(ptrArray);
 
@@ -51,7 +52,7 @@ function argsToNativePointer(args: string[]): {
   for (let i = 0; i < args.length; i++) {
     const ptr = Deno.UnsafePointer.of(argBuffers[i] as Uint8Array<ArrayBuffer>);
     const ptrValue = Deno.UnsafePointer.value(ptr);
-    view.setBigUint64(i * 8, ptrValue, true);
+    writePtr(view, i * POINTER_SIZE, ptrValue);
   }
 
   return {
@@ -81,10 +82,10 @@ function unsavedFilesToNativePointer(
   // CXUnsavedFile struct:
   // - filename: const char*
   // - contents: const char*
-  // - length: unsigned long (8 bytes on 64-bit)
-  // Total size: 8 + 8 + 8 = 24 bytes per struct
+  // - length: unsigned long (ULONG_SIZE bytes)
+  // Total size: POINTER_SIZE + POINTER_SIZE + ULONG_SIZE
 
-  const structSize = 24;
+  const structSize = POINTER_SIZE * 2 + ULONG_SIZE;
   const totalSize = unsavedFiles.length * structSize;
   const structArray = new Uint8Array(totalSize);
   _keepAlive.push(structArray);
@@ -107,32 +108,41 @@ function unsavedFilesToNativePointer(
     filenameBuffers.push(filenameBuffer);
     _keepAlive.push(filenameBuffer);
 
-    // Encode contents as null-terminated C string
-    const contentsBuffer = new TextEncoder().encode(file.contents + "\0");
+    // Encode contents - use UTF-8 byte length (not file.length)
+    const contentsBuffer = new TextEncoder().encode(file.contents);
+    const contentsLength = contentsBuffer.byteLength;
     contentsBuffers.push(contentsBuffer);
     _keepAlive.push(contentsBuffer);
 
-    // Set struct fields at offset i * 24
+    // Set struct fields at offset i * structSize
     const offset = i * structSize;
 
     // filename pointer (offset 0)
     const filenamePtr = Deno.UnsafePointer.of(
       filenameBuffer as Uint8Array<ArrayBuffer>,
     );
-    view.setBigUint64(offset, Deno.UnsafePointer.value(filenamePtr), true);
+    writePtr(view, offset, Deno.UnsafePointer.value(filenamePtr));
 
-    // contents pointer (offset 8)
+    // contents pointer (offset POINTER_SIZE)
     const contentsPtr = Deno.UnsafePointer.of(
       contentsBuffer as Uint8Array<ArrayBuffer>,
     );
-    view.setBigUint64(
-      offset + 8,
+    writePtr(
+      view,
+      offset + POINTER_SIZE,
       Deno.UnsafePointer.value(contentsPtr),
-      true,
     );
 
-    // length (offset 16)
-    view.setBigUint64(offset + 16, BigInt(file.length), true);
+    // length (offset POINTER_SIZE * 2) - use UTF-8 byte length
+    if (ULONG_SIZE === 8) {
+      view.setBigUint64(
+        offset + POINTER_SIZE * 2,
+        BigInt(contentsLength),
+        true,
+      );
+    } else {
+      view.setUint32(offset + POINTER_SIZE * 2, contentsLength, true);
+    }
   }
 
   return {

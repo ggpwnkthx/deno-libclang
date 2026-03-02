@@ -9,11 +9,13 @@ import type {
   CXSourceRange,
   CXString,
   CXType,
+  NativePointer,
   SourceLocation,
   SourceRange,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { getFileName } from "./file.ts";
+import { bigintToPtrValue, POINTER_SIZE } from "../utils/ffi.ts";
 
 /**
  * Convert a CXString to a JavaScript string
@@ -60,46 +62,126 @@ export function toNativeType(type: CXType | Uint8Array): CXType {
 /**
  * Parse a CXSourceLocation into a SourceLocation
  *
- * @param location - The CXSourceLocation from libclang
+ * Uses clang_getSpellingLocation to properly extract file, line, column, and offset.
+ *
+ * @param location - The CXSourceLocation from libclang (struct return or CXSourceLocation object)
  * @returns A SourceLocation object with file, line, column, and offset
  */
 export function parseSourceLocation(
-  location: CXSourceLocation,
+  location: CXSourceLocation | Uint8Array,
 ): SourceLocation {
-  // Parse the CXSourceLocation struct
-  // CXSourceLocation has: ptr_data: [NativePointer, NativePointer], int_data: number
-  let filePtr: Deno.PointerValue | null = null;
-  let line = 0;
-  let column = 0;
+  const sym = getSymbols();
 
-  if (location && typeof location === "object") {
-    // Handle case where location is already parsed
-    if (location.ptr_data) {
-      filePtr = location.ptr_data[0] as Deno.PointerValue | null;
-      // int_data contains line in lower bits, column in upper bits
-      const intData = location.int_data as number;
-      line = intData & 0xFFFFFFFF;
-      column = (intData >> 32) & 0xFFFFFFFF;
+  // Prepare location in the format expected by clang_getSpellingLocation
+  // For CXSourceLocation object, convert to buffer
+  let locationBuffer: Uint8Array;
+  const _filePtrVal: NativePointer | null = null;
+
+  if (location instanceof Uint8Array) {
+    locationBuffer = location;
+  } else if (location && typeof location === "object" && location.ptr_data) {
+    // Create buffer from CXSourceLocation object
+    locationBuffer = new Uint8Array(POINTER_SIZE * 2 + 4);
+    const view = new DataView(
+      locationBuffer.buffer,
+      locationBuffer.byteOffset,
+      locationBuffer.byteLength,
+    );
+
+    // ptr_data[0] - file pointer
+    const ptr0 = location.ptr_data[0];
+    const ptr0Val = typeof ptr0 === "bigint" ? ptr0 : 0n;
+    if (POINTER_SIZE === 8) {
+      view.setBigUint64(0, ptr0Val, true);
+    } else {
+      view.setUint32(0, Number(ptr0Val), true);
     }
+
+    // ptr_data[1]
+    const ptr1 = location.ptr_data[1];
+    const ptr1Val = typeof ptr1 === "bigint" ? ptr1 : 0n;
+    if (POINTER_SIZE === 8) {
+      view.setBigUint64(POINTER_SIZE, ptr1Val, true);
+    } else {
+      view.setUint32(POINTER_SIZE, Number(ptr1Val), true);
+    }
+
+    // int_data
+    const intData = typeof location.int_data === "number"
+      ? location.int_data
+      : 0;
+    view.setUint32(POINTER_SIZE * 2, intData, true);
+  } else {
+    // Invalid location
+    return { file: null, line: 0, column: 0, offset: 0 };
   }
 
-  // Note: libclang does not provide a direct API to get character offset from source location.
-  // The offset would need to be computed from the file content using line/column.
-  // For now, we set offset to 0 as a placeholder - users can compute it manually if needed.
-  const offset = 0;
+  // Create buffers for output parameters
+  const fileBuf = new Uint8Array(POINTER_SIZE);
+  const lineBuf = new Uint8Array(POINTER_SIZE);
+  const colBuf = new Uint8Array(POINTER_SIZE);
+  const offsetBuf = new Uint8Array(POINTER_SIZE);
+
+  // Get pointers to the buffers
+  const fileBufPtr = Deno.UnsafePointer.of(fileBuf);
+  const lineBufPtr = Deno.UnsafePointer.of(lineBuf);
+  const colBufPtr = Deno.UnsafePointer.of(colBuf);
+  const offsetBufPtr = Deno.UnsafePointer.of(offsetBuf);
+
+  // Call clang_getSpellingLocation
+  // Parameters: location, file*, line*, column*, offset*
+  sym.clang_getSpellingLocation(
+    locationBuffer as unknown as CXSourceLocation,
+    fileBufPtr,
+    lineBufPtr,
+    colBufPtr,
+    offsetBufPtr,
+  );
+
+  // Read output values from the buffers
+  const lineView = new DataView(
+    lineBuf.buffer,
+    lineBuf.byteOffset,
+    POINTER_SIZE,
+  );
+  const colView = new DataView(colBuf.buffer, colBuf.byteOffset, POINTER_SIZE);
+  const offsetView = new DataView(
+    offsetBuf.buffer,
+    offsetBuf.byteOffset,
+    POINTER_SIZE,
+  );
+
+  const line = POINTER_SIZE === 8
+    ? Number(lineView.getBigUint64(0, true))
+    : lineView.getUint32(0, true);
+  const column = POINTER_SIZE === 8
+    ? Number(colView.getBigUint64(0, true))
+    : colView.getUint32(0, true);
+  const offset = POINTER_SIZE === 8
+    ? Number(offsetView.getBigUint64(0, true))
+    : offsetView.getUint32(0, true);
+
+  // Read the file pointer from output
+  const fileView = new DataView(
+    fileBuf.buffer,
+    fileBuf.byteOffset,
+    POINTER_SIZE,
+  );
+  const filePtr = POINTER_SIZE === 8
+    ? fileView.getBigUint64(0, true)
+    : BigInt(fileView.getUint32(0, true));
 
   // Get the file name from the file pointer
   let file: string | null = null;
-  if (filePtr && filePtr !== null) {
+  if (filePtr !== 0n) {
     try {
-      const cxFile = filePtr as unknown as CXFile;
+      const cxFile = bigintToPtrValue(filePtr) as unknown as CXFile;
       const name = getFileName(cxFile);
       if (name) {
         file = name;
       }
-    } catch (_e) {
-      // Return null for file if we can't get the name - this is a valid fallback
-      // rather than throwing an error for internal FFI issues
+    } catch {
+      // Return null for file if we can't get the name
       file = null;
     }
   }
@@ -115,21 +197,75 @@ export function parseSourceLocation(
 /**
  * Parse a CXSourceRange into a SourceRange
  *
- * @param range - The CXSourceRange from libclang
+ * Uses clang_getRangeStart and clang_getRangeEnd to get proper location data.
+ *
+ * @param range - The CXSourceRange from libclang (struct return or CXSourceRange object)
  * @returns A SourceRange object with start and end locations
  */
-export function parseSourceRange(range: CXSourceRange): SourceRange {
-  // Handle null or invalid ranges
-  if (!range.ptr_data || !range.ptr_data[0] || !range.ptr_data[1]) {
+export function parseSourceRange(
+  range: CXSourceRange | Uint8Array,
+): SourceRange {
+  const sym = getSymbols();
+
+  // For CXSourceRange object, convert to buffer; for Uint8Array use directly
+  let rangeBuffer: Uint8Array;
+
+  if (range instanceof Uint8Array) {
+    rangeBuffer = range;
+  } else if (range && typeof range === "object" && range.ptr_data) {
+    rangeBuffer = new Uint8Array(POINTER_SIZE * 2 + 8);
+    const view = new DataView(
+      rangeBuffer.buffer,
+      rangeBuffer.byteOffset,
+      rangeBuffer.byteLength,
+    );
+
+    // ptr_data[0] - start location
+    const ptr0 = range.ptr_data[0];
+    const ptr0Val = typeof ptr0 === "bigint" ? ptr0 : 0n;
+    if (POINTER_SIZE === 8) {
+      view.setBigUint64(0, ptr0Val, true);
+    } else {
+      view.setUint32(0, Number(ptr0Val), true);
+    }
+
+    // ptr_data[1] - end location
+    const ptr1 = range.ptr_data[1];
+    const ptr1Val = typeof ptr1 === "bigint" ? ptr1 : 0n;
+    if (POINTER_SIZE === 8) {
+      view.setBigUint64(POINTER_SIZE, ptr1Val, true);
+    } else {
+      view.setUint32(POINTER_SIZE, Number(ptr1Val), true);
+    }
+
+    // int_data[0] and int_data[1]
+    if (Array.isArray(range.int_data)) {
+      view.setUint32(POINTER_SIZE * 2, range.int_data[0] || 0, true);
+      view.setUint32(POINTER_SIZE * 2 + 4, range.int_data[1] || 0, true);
+    }
+  } else {
     return {
       start: { file: null, line: 0, column: 0, offset: 0 },
       end: { file: null, line: 0, column: 0, offset: 0 },
     };
   }
-  return {
-    start: parseSourceLocation(
-      range.ptr_data[0] as unknown as CXSourceLocation,
-    ),
-    end: parseSourceLocation(range.ptr_data[1] as unknown as CXSourceLocation),
-  };
+
+  try {
+    const startLocation = sym.clang_getRangeStart(
+      rangeBuffer as unknown as CXSourceRange,
+    );
+    const endLocation = sym.clang_getRangeEnd(
+      rangeBuffer as unknown as CXSourceRange,
+    );
+
+    return {
+      start: parseSourceLocation(startLocation),
+      end: parseSourceLocation(endLocation),
+    };
+  } catch {
+    return {
+      start: { file: null, line: 0, column: 0, offset: 0 },
+      end: { file: null, line: 0, column: 0, offset: 0 },
+    };
+  }
 }

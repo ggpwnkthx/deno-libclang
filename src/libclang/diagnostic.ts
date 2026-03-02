@@ -90,12 +90,7 @@ export function getDiagnostics(unit: CXTranslationUnit): Diagnostic[] {
 
     // Get diagnostic location using clang_getDiagnosticLocation
     const cxLocation = sym.clang_getDiagnosticLocation(diagnostic);
-    const location = parseSourceLocation(
-      cxLocation as unknown as {
-        ptr_data: [Deno.PointerValue, Deno.PointerValue];
-        int_data: number;
-      },
-    );
+    const location = parseSourceLocation(cxLocation);
 
     diagnostics.push({
       severity,

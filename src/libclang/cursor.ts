@@ -24,6 +24,7 @@ import {
   toNativeCursor,
 } from "./helpers.ts";
 import { NativeCXCursor } from "./native_cursor.ts";
+import { bigintToPtrValue, POINTER_SIZE, readPtr } from "../utils/ffi.ts";
 
 /**
  * Get the kind of a cursor
@@ -172,43 +173,53 @@ function createVisitorCallback(): Deno.PointerValue {
     },
     (
       cursorStruct: Uint8Array,
-      _parentStruct: Uint8Array,
+      parentStruct: Uint8Array,
       _clientData: Deno.PointerValue,
     ): number => {
-      // Parse CXCursor from the struct buffer
-      const view = new DataView(
+      // Parse CXCursor from the cursor struct buffer
+      const cursorView = new DataView(
         cursorStruct.buffer,
         cursorStruct.byteOffset,
         cursorStruct.byteLength,
       );
-      const kind = view.getUint32(0, true);
-      const xdata = view.getInt32(4, true);
-      const data0 = view.getBigUint64(8, true);
-      const data1 = view.getBigUint64(16, true);
-      const data2 = view.getBigUint64(24, true);
+      const cursorKind = cursorView.getUint32(0, true);
+      const cursorXdata = cursorView.getInt32(4, true);
+      const cursorData0 = readPtr(cursorView, 8);
+      const cursorData1 = readPtr(cursorView, 8 + POINTER_SIZE);
+      const cursorData2 = readPtr(cursorView, 8 + POINTER_SIZE * 2);
 
       // Create a native buffer that can be passed to FFI functions
       const nativeCursor = new NativeCXCursor(
-        kind,
-        xdata,
-        data0,
-        data1,
-        data2,
+        cursorKind,
+        cursorXdata,
+        cursorData0,
+        cursorData1,
+        cursorData2,
       );
       const cursorBuffer = nativeCursor.getBuffer();
 
       // Get the CXCursor object for the visitor callback
       const cursor = nativeCursor.toCXCursor();
 
-      // Get the parent cursor (not readily available from this callback signature)
-      // We'll pass a null parent for now
+      // Parse parent cursor from the parent struct buffer
+      const parentView = new DataView(
+        parentStruct.buffer,
+        parentStruct.byteOffset,
+        parentStruct.byteLength,
+      );
+      const parentKind = parentView.getUint32(0, true);
+      const parentXdata = parentView.getInt32(4, true);
+      const parentData0 = readPtr(parentView, 8);
+      const parentData1 = readPtr(parentView, 8 + POINTER_SIZE);
+      const parentData2 = readPtr(parentView, 8 + POINTER_SIZE * 2);
+
       const parent: CXCursor = {
-        kind: 0,
-        xdata: 0,
+        kind: parentKind as CXCursorKind,
+        xdata: parentXdata,
         data: [
-          null as unknown as Deno.PointerValue,
-          null as unknown as Deno.PointerValue,
-          null as unknown as Deno.PointerValue,
+          bigintToPtrValue(parentData0),
+          bigintToPtrValue(parentData1),
+          bigintToPtrValue(parentData2),
         ],
       };
 
@@ -220,14 +231,13 @@ function createVisitorCallback(): Deno.PointerValue {
         // Collect the native buffer for later retrieval (can be passed to FFI)
         addCollectedCursorBuffer(cursorBuffer);
 
-        // Return the result - Deno FFI inverts the return value for callback functions
-        // returning i32. When the visitor returns 0 (Continue), it should continue
-        // traversing, but Deno FFI inverts this. Inverting it back fixes the issue.
-        const returnValue = result === 0 ? 1 : 0;
-        return returnValue;
+        // Deno FFI inverts callback return values: native = 1 - jsReturn
+        // Encode the desired libclang value (Break=0, Continue=1, Recurse=2)
+        // to the JS return value that yields it after inversion.
+        return result;
       }
 
-      // If no visitor, return Continue
+      // If no visitor, encode Continue so Deno inversion yields Continue (1)
       return CXChildVisitResult.Continue;
     },
   );

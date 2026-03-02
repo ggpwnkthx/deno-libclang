@@ -2,18 +2,25 @@
  * Native CXCursor wrapper - can be properly passed to FFI functions
  *
  * CXCursor is a struct: { kind: u32, xdata: i32, data: [pointer, pointer, pointer] }
- * Total size: 4 + 4 + 24 = 32 bytes (but we use 40 for alignment)
+ * Total size: 4 + 4 + 3*POINTER_SIZE bytes
  *
  * This class provides a buffer-based representation of a CXCursor that can be
  * directly passed to FFI functions without needing to construct a full CXCursor object.
  */
 
-import type { CXCursor, CXCursorKind, NativePointer } from "../ffi/types.ts";
+import type { CXCursor, CXCursorKind } from "../ffi/types.ts";
+import {
+  bigintToPtrValue,
+  CX_CURSOR_SIZE,
+  POINTER_SIZE,
+  readPtr,
+  writePtr,
+} from "../utils/ffi.ts";
 
 /**
  * Size of the CXCursor DataView for extracting cursor kind
  */
-export const CURSOR_VIEW_SIZE = 40;
+export const CURSOR_VIEW_SIZE = CX_CURSOR_SIZE;
 
 /**
  * Extract cursor kind from a buffer using DataView
@@ -62,14 +69,17 @@ export class NativeCXCursor {
     data1: bigint,
     data2: bigint,
   ) {
-    // 5 fields * 8 bytes = 40 bytes
-    this.buffer = new Uint8Array(40);
-    const view = new DataView(this.buffer.buffer, this.buffer.byteOffset, 40);
+    this.buffer = new Uint8Array(CX_CURSOR_SIZE);
+    const view = new DataView(
+      this.buffer.buffer,
+      this.buffer.byteOffset,
+      CX_CURSOR_SIZE,
+    );
     view.setUint32(0, kind, true); // kind: u32
     view.setInt32(4, xdata, true); // xdata: i32
-    view.setBigUint64(8, data0, true); // data[0]: pointer
-    view.setBigUint64(16, data1, true); // data[1]: pointer
-    view.setBigUint64(24, data2, true); // data[2]: pointer
+    writePtr(view, 8, data0); // data[0]: pointer at offset 8
+    writePtr(view, 8 + POINTER_SIZE, data1); // data[1]: pointer at offset 8+POINTER_SIZE
+    writePtr(view, 8 + POINTER_SIZE * 2, data2); // data[2]: pointer at offset 8+POINTER_SIZE*2
   }
 
   /**
@@ -106,7 +116,10 @@ export class NativeCXCursor {
    * @returns The data pointer as bigint
    */
   getData(index: number): bigint {
-    return new DataView(this.buffer.buffer).getBigUint64(8 + index * 8, true);
+    return readPtr(
+      new DataView(this.buffer.buffer),
+      8 + index * POINTER_SIZE,
+    );
   }
 
   /**
@@ -120,9 +133,9 @@ export class NativeCXCursor {
       kind: view.getUint32(0, true),
       xdata: view.getInt32(4, true),
       data: [
-        view.getBigUint64(8, true) as unknown as NativePointer,
-        view.getBigUint64(16, true) as unknown as NativePointer,
-        view.getBigUint64(24, true) as unknown as NativePointer,
+        bigintToPtrValue(readPtr(view, 8)),
+        bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE)),
+        bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE * 2)),
       ],
     };
   }

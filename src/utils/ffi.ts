@@ -4,8 +4,36 @@
  * Provides common FFI operations used across multiple modules.
  */
 
-// Pointer size is always 8 bytes on 64-bit systems
-const POINTER_SIZE = 8;
+// Determine pointer size based on platform
+export const POINTER_SIZE = Deno.build.arch === "x86_64" ||
+    Deno.build.arch === "aarch64"
+  ? 8
+  : 4;
+
+// ULONG_SIZE: On Windows LLP64, unsigned long is always 32-bit
+// On Unix, it's 32-bit on 32-bit systems, 64-bit on 64-bit systems
+export const ULONG_SIZE = Deno.build.os === "windows"
+  ? 4
+  : Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64"
+  ? 8
+  : 4;
+
+// CXCursor size: kind:u32 + xdata:i32 + 3 pointers
+export const CX_CURSOR_SIZE = 8 + POINTER_SIZE * 3;
+
+// CXType size: kind:u32 + reserved:u32 + 2 pointers
+export const CX_TYPE_SIZE = 8 + POINTER_SIZE * 2;
+
+// CXSourceLocation: 2 pointers + u32
+export const CX_SOURCE_LOCATION_SIZE = POINTER_SIZE * 2 + 4;
+
+// CXSourceRange: 2 pointers + 2 u32s
+export const CX_SOURCE_RANGE_SIZE = POINTER_SIZE * 2 + 8;
+
+// Little-endian guard - throw on big-endian systems
+if (new Uint8Array(new Uint16Array([1]).buffer)[0] !== 1) {
+  throw new Error("Big-endian systems not supported");
+}
 
 // Reusable TextEncoder instance (stateless and safe to reuse)
 const encoder = new TextEncoder();
@@ -27,7 +55,7 @@ export function createPointerBuffer(size: number = POINTER_SIZE): Uint8Array {
  * @returns The pointer value as a bigint
  */
 export function getPointer(buffer: Uint8Array): bigint {
-  return new DataView(buffer.buffer).getBigUint64(0, true);
+  return readPtrFromBuffer(buffer, 0);
 }
 
 /**
@@ -37,7 +65,49 @@ export function getPointer(buffer: Uint8Array): bigint {
  * @param ptr - The pointer value to set
  */
 export function setPointer(buffer: Uint8Array, ptr: bigint): void {
-  new DataView(buffer.buffer).setBigUint64(0, ptr, true);
+  const view = new DataView(buffer.buffer, buffer.byteOffset, POINTER_SIZE);
+  writePtr(view, 0, ptr);
+}
+
+/**
+ * Read a pointer from DataView at given offset (pointer-size aware)
+ */
+export function readPtr(view: DataView, offset: number): bigint {
+  if (POINTER_SIZE === 8) {
+    return view.getBigUint64(offset, true);
+  } else {
+    return BigInt(view.getUint32(offset, true));
+  }
+}
+
+/**
+ * Write a pointer to DataView at given offset (pointer-size aware)
+ */
+export function writePtr(view: DataView, offset: number, value: bigint): void {
+  if (POINTER_SIZE === 8) {
+    view.setBigUint64(offset, value, true);
+  } else {
+    view.setUint32(offset, Number(value), true);
+  }
+}
+
+/**
+ * Read a pointer from a Uint8Array buffer
+ */
+export function readPtrFromBuffer(buf: Uint8Array, offset: number = 0): bigint {
+  const view = new DataView(buf.buffer, buf.byteOffset + offset, POINTER_SIZE);
+  return readPtr(view, 0);
+}
+
+/**
+ * Convert a bigint address to Deno.PointerValue
+ * 0n -> null, otherwise -> UnsafePointer
+ */
+export function bigintToPtrValue(addr: bigint): Deno.PointerValue | null {
+  if (addr === 0n) {
+    return null;
+  }
+  return Deno.UnsafePointer.create(addr);
 }
 
 /**
@@ -87,13 +157,28 @@ export function isValidPointer(ptr: Deno.PointerValue | null): boolean {
 }
 
 /**
+ * Result from cstringToPtr - includes pointer and buffer to keep alive
+ */
+export interface CStringResult {
+  ptr: Deno.PointerValue;
+  keepAlive: Uint8Array;
+}
+
+/**
  * Convert a JavaScript string to a C string pointer
  *
+ * IMPORTANT: The returned keepAlive buffer must be kept in scope for the
+ * pointer to remain valid. The caller is responsible for maintaining a
+ * reference to the keepAlive buffer.
+ *
  * @param str - The JavaScript string to convert
- * @returns A pointer to the encoded string data
+ * @returns An object containing the pointer and a buffer that must be kept alive
  */
-export function cstringToPtr(str: string): Deno.PointerValue {
+export function cstringToPtr(str: string): CStringResult {
   const data = encoder.encode(str + "\0");
   const buffer = new Uint8Array(data);
-  return Deno.UnsafePointer.of(buffer);
+  return {
+    ptr: Deno.UnsafePointer.of(buffer),
+    keepAlive: buffer,
+  };
 }

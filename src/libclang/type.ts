@@ -10,6 +10,7 @@ import {
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { cxStringToString, toNativeCursor, toNativeType } from "./helpers.ts";
+import { CX_TYPE_SIZE, POINTER_SIZE, readPtr, writePtr } from "../utils/ffi.ts";
 
 /**
  * Parse CXType result from FFI call
@@ -38,11 +39,12 @@ function parseCXTypeResult(result: Uint8Array | CXType): CXType {
  * @returns A Uint8Array buffer that can be passed to FFI functions
  */
 export function cxTypeToBuffer(type: CXType): Uint8Array {
-  const view = new DataView(new ArrayBuffer(24));
+  const view = new DataView(new ArrayBuffer(CX_TYPE_SIZE));
   view.setUint32(0, type.kind, true);
   view.setUint32(4, type.reserved, true);
-  view.setBigUint64(8, type.data0 as unknown as bigint, true);
-  view.setBigUint64(16, type.data1 as unknown as bigint, true);
+  // Treat data0 and data1 as opaque integral slots (bigint), not pointer objects
+  writePtr(view, 8, type.data0 as unknown as bigint);
+  writePtr(view, 8 + POINTER_SIZE, type.data1 as unknown as bigint);
   return new Uint8Array(view.buffer);
 }
 
@@ -63,8 +65,8 @@ export function parseCXTypeFromBuffer(buffer: Uint8Array): CXType {
   // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
   const kind = view.getUint32(0, true);
   const reserved = view.getUint32(4, true);
-  const data0 = view.getBigUint64(8, true);
-  const data1 = view.getBigUint64(16, true);
+  const data0 = readPtr(view, 8);
+  const data1 = readPtr(view, 8 + POINTER_SIZE);
 
   return {
     kind,
@@ -103,18 +105,49 @@ export function getTypedefUnderlyingType(
 }
 
 /**
- * Get the value type from an elaborated type
+ * Get the value type from an atomic type
  *
- * For types like `int8_t` that are elaborated, this returns the underlying type
+ * For atomic types (C11 _Atomic), this returns the underlying value type.
+ * Note: This is NOT for unwrapping elaborated types - use getNamedType() for that.
  *
- * @param type - CXType that may be elaborated
- * @returns CXType of the value type
+ * @param type - CXType that may be an atomic type
+ * @returns CXType of the value type, or an invalid type if not atomic
  */
-export function getValueType(type: CXType | Uint8Array): CXType {
+export function getAtomicValueType(type: CXType | Uint8Array): CXType {
   const sym = getSymbols();
   const typeArg = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
   const result = sym.clang_Type_getValueType(typeArg as unknown as CXType);
   return parseCXTypeResult(result);
+}
+
+/**
+ * Get the named type from an elaborated type
+ *
+ * For elaborated types (e.g., "struct Foo", "class Bar"), this returns the
+ * named underlying type.
+ *
+ * @param type - CXType that may be an elaborated type
+ * @returns CXType of the named type
+ */
+export function getNamedType(type: CXType | Uint8Array): CXType {
+  const sym = getSymbols();
+  const typeArg = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
+  const result = sym.clang_Type_getNamedType(typeArg as unknown as CXType);
+  return parseCXTypeResult(result);
+}
+
+/**
+ * Get the value type from an elaborated type (legacy alias)
+ *
+ * @deprecated Use getAtomicValueType() for atomic types or getNamedType() for
+ *             elaborated types. This function now delegates to getAtomicValueType.
+ * @param type - CXType that may be elaborated
+ * @returns CXType of the value type
+ */
+export function getValueType(type: CXType | Uint8Array): CXType {
+  // getValueType was incorrectly documented as unwrapping elaborated types
+  // but actually only works for atomic types. Delegate to atomic version.
+  return getAtomicValueType(type);
 }
 
 /**
@@ -244,16 +277,26 @@ export function getTypeAlignment(type: CXType | Uint8Array): number {
 /**
  * Check if a type has the const qualifier
  *
- * Uses spelling-based detection since clang_Type_isConst is not available
- * in all LLVM versions (removed in LLVM 20).
+ * Tries to use clang_isConstQualifiedType if available (LLVM 15+),
+ * falls back to spelling-based detection otherwise.
  *
  * @param type - CXType or Uint8Array buffer
  * @returns true if the type has the const qualifier, false otherwise
  */
 export function isConstType(type: CXType | Uint8Array): boolean {
-  // Use spelling-based detection
+  const sym = getSymbols();
+  // Try to use clang_isConstQualifiedType if available
+  if (sym.clang_isConstQualifiedType) {
+    const typeBuffer = type instanceof Uint8Array ? type : cxTypeToBuffer(type);
+    const result = sym.clang_isConstQualifiedType(
+      typeBuffer as unknown as CXType,
+    );
+    return result !== 0;
+  }
+  // Fall back to spelling-based detection
   const spelling = getTypeSpelling(type);
-  return spelling.toLowerCase().includes("const");
+  // Match "const" as a word boundary, not as part of another word
+  return /\bconst\b/.test(spelling);
 }
 
 /**
@@ -277,6 +320,7 @@ export type NativeType =
  * Check if a type spelling represents a char pointer type
  *
  * This handles: char*, const char*, char**, const char**, etc.
+ * Does NOT match: wchar_t*, char16_t*, char32_t*
  *
  * @param typeSpelling - The type spelling string (e.g., "const char*", "char**")
  * @returns true if the type is a char pointer type
@@ -285,14 +329,25 @@ export function isCharPointerType(typeSpelling: string): boolean {
   const spelling = typeSpelling.toLowerCase();
   // Remove const/volatile prefixes for checking
   const cleanSpelling = spelling.replace(/^(const |volatile )/, "").trim();
-  // Check for char* or char** patterns
-  return cleanSpelling.includes("char") && cleanSpelling.includes("*");
+  // Exclude wchar_t, char16_t, char32_t
+  if (
+    cleanSpelling.includes("char16") ||
+    cleanSpelling.includes("char32") ||
+    cleanSpelling.includes("wchar")
+  ) {
+    return false;
+  }
+  // Match only plain "char*" not "wchar_t*" or "char16_t*"
+  // Use anchored regex to match only char at start or preceded by non-word char
+  return /(^|[^a-z])char(\*)+/.test(cleanSpelling) ||
+    (cleanSpelling.includes("char") && cleanSpelling.includes("*"));
 }
 
 /**
  * Check if a type spelling represents a void pointer type
  *
  * This handles: void*, const void*, void**, etc.
+ * Does NOT match: plain "void" (not a pointer)
  *
  * @param typeSpelling - The type spelling string
  * @returns true if the type is a void pointer type
@@ -301,7 +356,8 @@ export function isVoidPointerType(typeSpelling: string): boolean {
   const spelling = typeSpelling.toLowerCase();
   // Remove const/volatile prefixes for checking
   const cleanSpelling = spelling.replace(/^(const |volatile )/, "").trim();
-  return cleanSpelling === "void" ||
+  // Must have at least one pointer asterisk - void by itself is not a pointer
+  return cleanSpelling === "void*" ||
     (cleanSpelling.includes("void") && cleanSpelling.includes("*"));
 }
 
@@ -333,33 +389,40 @@ export function typeKindToFFI(
     case CXTypeKind.Void:
       return "void";
     case CXTypeKind.Bool:
-    case CXTypeKind.Char_U:
-    case CXTypeKind.Char_S:
       return "u8";
+    case CXTypeKind.Char_S:
+      // On Windows, char is unsigned (u8). On Unix, it's signed (i8).
+      // Document platform dependence.
+      return Deno.build.os === "windows" ? "u8" : "i8";
+    case CXTypeKind.Char_U:
+      return "u8"; // unsigned char always u8
     case CXTypeKind.SChar:
       // Check spelling for unsigned variants (libclang sometimes misreports uint8_t as SChar)
-      if (typeSpelling.toLowerCase().includes("uint8")) return "u8";
+      if (/\buint8(_t)?\b/.test(typeSpelling.toLowerCase())) return "u8";
       return "i8";
     case CXTypeKind.UChar:
       return "u8";
     case CXTypeKind.Short:
       // Check spelling for unsigned variants (libclang sometimes misreports uint16_t as Short)
-      if (typeSpelling.toLowerCase().includes("uint16")) return "u16";
+      if (/\buint16(_t)?\b/.test(typeSpelling.toLowerCase())) return "u16";
       return "i16";
     case CXTypeKind.UShort:
       return "u16";
     case CXTypeKind.Int:
       // Check spelling for unsigned variants (libclang sometimes misreports uint32_t as Int)
-      if (typeSpelling.toLowerCase().includes("uint32")) return "u32";
+      if (/\buint32(_t)?\b/.test(typeSpelling.toLowerCase())) return "u32";
       return "i32";
     case CXTypeKind.UInt:
       return "u32";
     case CXTypeKind.Long:
-      // Use pointer size - 64-bit: i64, 32-bit: i32
+      // Windows LLP64: long is always 32-bit even on x86_64
+      if (Deno.build.os === "windows") return "i32";
       return Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64"
         ? "i64"
         : "i32";
     case CXTypeKind.ULong:
+      // Windows LLP64: unsigned long is always 32-bit even on x86_64
+      if (Deno.build.os === "windows") return "u32";
       return Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64"
         ? "u64"
         : "u32";
@@ -382,27 +445,28 @@ export function typeKindToFFI(
       // For now, try to infer from spelling
       const spelling = typeSpelling.toLowerCase();
       // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
-      if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
+      // Use word boundary matching to avoid matching "uint16_t" as "int16"
+      if (/\buint8(_t)?\b/.test(spelling)) {
         return "u8";
       }
-      if (spelling.includes("int8") || spelling.includes("int8_t")) return "i8";
-      if (spelling.includes("uint16") || spelling.includes("uint16_t")) {
+      if (/\bint8(_t)?\b/.test(spelling)) return "i8";
+      if (/\buint16(_t)?\b/.test(spelling)) {
         return "u16";
       }
-      if (spelling.includes("int16") || spelling.includes("int16_t")) {
+      if (/\bint16(_t)?\b/.test(spelling)) {
         return "i16";
       }
       // Check unsigned before signed to avoid substring match issues
-      if (spelling.includes("uint64") || spelling.includes("uint64_t")) {
+      if (/\buint64(_t)?\b/.test(spelling)) {
         return "u64";
       }
-      if (spelling.includes("int64") || spelling.includes("int64_t")) {
+      if (/\bint64(_t)?\b/.test(spelling)) {
         return "i64";
       }
-      if (spelling.includes("uint32") || spelling.includes("uint32_t")) {
+      if (/\buint32(_t)?\b/.test(spelling)) {
         return "u32";
       }
-      if (spelling.includes("int32") || spelling.includes("int32_t")) {
+      if (/\bint32(_t)?\b/.test(spelling)) {
         return "i32";
       }
       if (spelling.includes("float")) return "f32";
@@ -417,33 +481,30 @@ export function typeKindToFFI(
       return null;
     }
     default: {
-      // Try to infer from spelling
+      // Try to infer from spelling - use word boundary matching to avoid substring bugs
       const spelling = typeSpelling.toLowerCase();
       // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
-      if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
+      if (/\buint8(_t)?\b/.test(spelling)) {
         return "u8";
       }
-      if (spelling.includes("int8") || spelling.includes("int8_t")) return "i8";
-      if (spelling.includes("uint8") || spelling.includes("uint8_t")) {
-        return "u8";
-      }
-      if (spelling.includes("int16") || spelling.includes("int16_t")) {
-        return "i16";
-      }
-      if (spelling.includes("uint16") || spelling.includes("uint16_t")) {
+      if (/\bint8(_t)?\b/.test(spelling)) return "i8";
+      if (/\buint16(_t)?\b/.test(spelling)) {
         return "u16";
       }
+      if (/\bint16(_t)?\b/.test(spelling)) {
+        return "i16";
+      }
       // Check unsigned before signed to avoid substring match issues
-      if (spelling.includes("uint64") || spelling.includes("uint64_t")) {
+      if (/\buint64(_t)?\b/.test(spelling)) {
         return "u64";
       }
-      if (spelling.includes("int64") || spelling.includes("int64_t")) {
+      if (/\bint64(_t)?\b/.test(spelling)) {
         return "i64";
       }
-      if (spelling.includes("uint32") || spelling.includes("uint32_t")) {
+      if (/\buint32(_t)?\b/.test(spelling)) {
         return "u32";
       }
-      if (spelling.includes("int32") || spelling.includes("int32_t")) {
+      if (/\bint32(_t)?\b/.test(spelling)) {
         return "i32";
       }
       if (spelling === "float") return "f32";

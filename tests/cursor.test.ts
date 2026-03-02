@@ -4,11 +4,8 @@
 
 import { assertEquals, assertExists } from "@std/assert";
 import {
-  createIndex,
   CXChildVisitResult,
   CXCursorKind,
-  disposeIndex,
-  disposeTranslationUnit,
   getCursorAvailability,
   getCursorDefinition,
   getCursorDisplayName,
@@ -22,39 +19,31 @@ import {
   getCursorUSR,
   getEnumConstantDeclUnsignedValue,
   getEnumConstantDeclValue,
-  getTranslationUnitCursor,
   load,
-  parseTranslationUnit,
   unload,
   visitChildren,
 } from "../mod.ts";
+import {
+  assertStringIncludes,
+  findChildByKind,
+  findChildrenByKind,
+  findCursorByKind,
+  findEnumConstants,
+  findFunctionParams,
+  findStructFields,
+  parseC,
+} from "./test_utils.ts";
 
 Deno.test({
   name: "cursor - get translation unit cursor",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int x = 5;`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const cursor = getTranslationUnitCursor(result.translationUnit);
-      assertExists(cursor);
-
-      const kind = getCursorKind(cursor);
+      const kind = getCursorKind(tuCursor);
       assertEquals(kind, CXCursorKind.TranslationUnit);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -62,29 +51,14 @@ Deno.test({
 Deno.test({
   name: "cursor - get cursor spelling",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int my_function(int arg);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int my_function(int arg);`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const cursor = getTranslationUnitCursor(result.translationUnit);
-      const spelling = getCursorSpelling(cursor);
-
+      const spelling = getCursorSpelling(tuCursor);
       // Translation unit spelling is empty
       assertEquals(typeof spelling, "string");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -92,28 +66,13 @@ Deno.test({
 Deno.test({
   name: "cursor - get cursor display name",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `void test_func(void);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`void test_func(void);`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const cursor = getTranslationUnitCursor(result.translationUnit);
-      const displayName = getCursorDisplayName(cursor);
-
+      const displayName = getCursorDisplayName(tuCursor);
       assertEquals(typeof displayName, "string");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -122,40 +81,22 @@ Deno.test({
   name: "cursor - get cursor kind spelling",
   fn() {
     load();
-
-    const spelling = getCursorKindSpelling(CXCursorKind.StructDecl);
-    assertStringIncludes(spelling, "Struct");
-    unload();
+    try {
+      const spelling = getCursorKindSpelling(CXCursorKind.StructDecl);
+      assertStringIncludes(spelling, "Struct");
+    } finally {
+      unload();
+    }
   },
 });
 
 Deno.test({
   name: "cursor - getCursorLocation",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int main() { return 0; }`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int main() { return 0; }`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
       // Get cursor location
@@ -163,12 +104,8 @@ Deno.test({
       assertExists(location);
       assertEquals(typeof location.line, "number");
       assertEquals(typeof location.column, "number");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -176,30 +113,10 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorExtent",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int main() { return 0; }`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int main() { return 0; }`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
       // Get cursor extent
@@ -207,12 +124,8 @@ Deno.test({
       assertExists(extent);
       assertExists(extent.start);
       assertExists(extent.end);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -220,41 +133,17 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorAvailability",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int x = 5;`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
       // Get cursor availability - should be 0 (Available)
       const availability = getCursorAvailability(varDecl);
       assertEquals(availability, 0);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -262,47 +151,22 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorReferenced",
   async fn() {
-    load();
-
-    const index = createIndex();
-    // Variable reference: global is used in main
     const code = `
       int global = 10;
       int main() { return global; }
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find the reference to 'global' in main (DeclRefExpr)
-      // This test checks the function is callable
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
       // Try getCursorReferenced - may return null cursor if no reference
       const referenced = getCursorReferenced(funcDecl);
       // Just verify it doesn't throw and returns something
       assertExists(referenced);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -310,45 +174,22 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorDefinition",
   async fn() {
-    load();
-
-    const index = createIndex();
     const code = `
       int global = 10;
       int main() { return global; }
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl for global
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
       // Get cursor definition
       const definition = getCursorDefinition(varDecl);
       // Should return something (the cursor itself for a definition)
       assertExists(definition);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -356,37 +197,44 @@ Deno.test({
 Deno.test({
   name: "cursor - getEnumConstantDeclValue (signed)",
   async fn() {
-    load();
-
-    const index = createIndex();
-    // Use enum in a way that actually creates enum constant declarations
+    // Use enum with explicit values: RED=-5, GREEN=0, BLUE=2
     const code = `
-      enum Color { RED = -5, GREEN, BLUE };
+      enum Color { RED = -5, GREEN = 0, BLUE = 2 };
       int main() { return RED; }
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
+      // Find the EnumDecl
+      const enumDeclBuffer = findChildByKind(tuCursor, CXCursorKind.EnumDecl);
+      assertExists(enumDeclBuffer, "Expected to find EnumDecl");
 
-      // Test that getEnumConstantDeclValue can be called on a valid buffer
-      // Create a mock buffer that represents an enum constant cursor
-      const mockBuffer = new Uint8Array(32);
-      const view = new DataView(mockBuffer.buffer);
-      view.setUint32(0, CXCursorKind.EnumConstantDecl, true);
+      // Find enum constant children using helper
+      const enumConstants = findEnumConstants(enumDeclBuffer);
 
-      // The function should be callable and return a bigint (may be 0n for invalid cursor)
-      const value = getEnumConstantDeclValue(mockBuffer);
-      assertEquals(typeof value, "bigint");
+      // Should have 3 enum constants
+      assertEquals(enumConstants.length, 3);
 
-      disposeTranslationUnit(result.translationUnit);
+      // Get values for each enum constant
+      const redValue = getEnumConstantDeclValue(enumConstants[0]);
+      const greenValue = getEnumConstantDeclValue(enumConstants[1]);
+      const blueValue = getEnumConstantDeclValue(enumConstants[2]);
+
+      // Verify the values match the enum declaration
+      assertEquals(redValue, -5n);
+      assertEquals(greenValue, 0n);
+      assertEquals(blueValue, 2n);
+
+      // Also verify spelling matches using the buffer-based function
+      const redSpelling = getCursorSpellingFromBuffer(enumConstants[0]);
+      const greenSpelling = getCursorSpellingFromBuffer(enumConstants[1]);
+      const blueSpelling = getCursorSpellingFromBuffer(enumConstants[2]);
+
+      assertEquals(redSpelling, "RED");
+      assertEquals(greenSpelling, "GREEN");
+      assertEquals(blueSpelling, "BLUE");
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -394,35 +242,35 @@ Deno.test({
 Deno.test({
   name: "cursor - getEnumConstantDeclUnsignedValue",
   async fn() {
-    load();
-
-    const index = createIndex();
+    // Use unsigned enum values
     const code = `
       enum Color { RED = 0, GREEN = 1, BLUE = 2 };
       int main() { return RED; }
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
+      // Find the EnumDecl
+      const enumDeclBuffer = findChildByKind(tuCursor, CXCursorKind.EnumDecl);
+      assertExists(enumDeclBuffer, "Expected to find EnumDecl");
 
-      // Test that getEnumConstantDeclUnsignedValue can be called on a buffer
-      const mockBuffer = new Uint8Array(32);
-      const view = new DataView(mockBuffer.buffer);
-      view.setUint32(0, CXCursorKind.EnumConstantDecl, true);
+      // Find enum constant children using helper
+      const enumConstants = findEnumConstants(enumDeclBuffer);
 
-      // The function should be callable and return a bigint
-      const unsignedValue = getEnumConstantDeclUnsignedValue(mockBuffer);
-      assertEquals(typeof unsignedValue, "bigint");
+      // Should have 3 enum constants
+      assertEquals(enumConstants.length, 3);
 
-      disposeTranslationUnit(result.translationUnit);
+      // Get unsigned values for each enum constant
+      const redValue = getEnumConstantDeclUnsignedValue(enumConstants[0]);
+      const greenValue = getEnumConstantDeclUnsignedValue(enumConstants[1]);
+      const blueValue = getEnumConstantDeclUnsignedValue(enumConstants[2]);
+
+      // Verify the unsigned values
+      assertEquals(redValue, 0n);
+      assertEquals(greenValue, 1n);
+      assertEquals(blueValue, 2n);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -430,30 +278,10 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorUSR",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `struct Point { int x; int y; };`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find StructDecl cursor
-      const structDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.StructDecl;
-      });
-
+      const structDecl = findCursorByKind(tuCursor, CXCursorKind.StructDecl);
       assertExists(structDecl, "Expected to find StructDecl cursor");
 
       // Get USR - should be a non-empty string
@@ -461,12 +289,8 @@ Deno.test({
       assertEquals(typeof usr, "string");
       // USR should contain some identifier for the struct
       assertEquals(usr.length > 0, true);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -474,51 +298,20 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorSpellingFromBuffer",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int my_function(void);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int my_function(void);`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
       // Get spelling from buffer
       const spelling = getCursorSpellingFromBuffer(funcDecl);
       assertEquals(spelling, "my_function");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
-
-// Helper function
-function assertStringIncludes(actual: string, expected: string): void {
-  if (!actual.includes(expected)) {
-    throw new Error(`Expected "${actual}" to include "${expected}"`);
-  }
-}
 
 // ============================================================================
 // visitChildren Tests
@@ -527,23 +320,13 @@ function assertStringIncludes(actual: string, expected: string): void {
 Deno.test({
   name: "cursor - visitChildren basic traversal",
   async fn() {
-    load();
-
-    const index = createIndex();
     const code = `
       struct Point { int x; int y; };
       int main() { return 0; }
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
       // Visit children and collect all
       const children = visitChildren(tuCursor, () => {
         return CXChildVisitResult.Continue;
@@ -552,12 +335,8 @@ Deno.test({
       // Should have found at least StructDecl and FunctionDecl
       assertExists(children);
       assertEquals(children.length >= 2, true);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -565,39 +344,17 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren returns Continue",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int a = 1; int b = 2; int c = 3;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int a = 1; int b = 2; int c = 3;`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
       // Using Continue should visit all children
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
+      const children = visitChildren(tuCursor, () => CXChildVisitResult.Continue);
 
       // Should find all 3 VarDecl
-      const varDecls = children.filter((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecls = findChildrenByKind(children, CXCursorKind.VarDecl);
       assertEquals(varDecls.length, 3);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -605,20 +362,9 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren returns Break",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int a = 1; int b = 2; int c = 3;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int a = 1; int b = 2; int c = 3;`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
       // Using Break should stop after first child
       let visitCount = 0;
       const children = visitChildren(tuCursor, () => {
@@ -629,12 +375,8 @@ Deno.test({
       // Should only visit 1 child then break
       assertEquals(visitCount, 1);
       assertEquals(children.length, 1);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -642,47 +384,29 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren traverses different cursor kinds",
   async fn() {
-    load();
-
-    const index = createIndex();
     const code = `
       struct Point { int x; int y; };
       enum Color { RED, GREEN, BLUE };
       int add(int a, int b) { return a + b; }
       int global_var = 10;
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
+      const children = visitChildren(tuCursor, () => CXChildVisitResult.Continue);
 
       // Check we found different cursor kinds
-      const kinds = new Set<number>();
-      for (const buffer of children) {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        kinds.add(kind);
-      }
+      const hasStruct = findChildrenByKind(children, CXCursorKind.StructDecl).length > 0;
+      const hasEnum = findChildrenByKind(children, CXCursorKind.EnumDecl).length > 0;
+      const hasFunc = findChildrenByKind(children, CXCursorKind.FunctionDecl).length > 0;
+      const hasVar = findChildrenByKind(children, CXCursorKind.VarDecl).length > 0;
 
-      // Should have at least StructDecl, EnumDecl, FunctionDecl, VarDecl
-      assertEquals(kinds.has(CXCursorKind.StructDecl), true);
-      assertEquals(kinds.has(CXCursorKind.FunctionDecl), true);
-      assertEquals(kinds.has(CXCursorKind.VarDecl), true);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertEquals(hasStruct, true);
+      assertEquals(hasEnum, true);
+      assertEquals(hasFunc, true);
+      assertEquals(hasVar, true);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -690,52 +414,20 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren with struct fields",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `struct Point { int x; int y; };`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // First get the struct declaration
-      const topLevelChildren = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      const structDecl = topLevelChildren.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.StructDecl;
-      });
-
+      // Find the struct declaration
+      const structDecl = findCursorByKind(tuCursor, CXCursorKind.StructDecl);
       assertExists(structDecl, "Expected to find StructDecl cursor");
 
-      // Now visit children of the struct to find fields
-      const structChildren = visitChildren(structDecl, () => {
-        return CXChildVisitResult.Continue;
-      });
+      // Use helper to find fields
+      const fieldDecls = findStructFields(structDecl);
 
       // Should have 2 FieldDecl (x and y)
-      const fieldDecls = structChildren.filter((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FieldDecl;
-      });
-
       assertEquals(fieldDecls.length, 2);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -743,52 +435,20 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren with enum values",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `enum Color { RED, GREEN, BLUE };`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`enum Color { RED, GREEN, BLUE };`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // First get the enum declaration
-      const topLevelChildren = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      const enumDecl = topLevelChildren.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.EnumDecl;
-      });
-
+      // Find the enum declaration
+      const enumDecl = findCursorByKind(tuCursor, CXCursorKind.EnumDecl);
       assertExists(enumDecl, "Expected to find EnumDecl cursor");
 
-      // Now visit children of the enum to find enum constants
-      const enumChildren = visitChildren(enumDecl, () => {
-        return CXChildVisitResult.Continue;
-      });
+      // Use helper to find enum constants
+      const enumConstants = findEnumConstants(enumDecl);
 
       // Should have 3 EnumConstantDecl (RED, GREEN, BLUE)
-      const enumConstants = enumChildren.filter((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.EnumConstantDecl;
-      });
-
       assertEquals(enumConstants.length, 3);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -796,52 +456,112 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren with function parameters",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int add(int a, int b, int c);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
+    const { tuCursor, cleanup } = await parseC(`int add(int a, int b, int c);`);
 
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // First get the function declaration
-      const topLevelChildren = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      const funcDecl = topLevelChildren.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      // Find the function declaration
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Now visit children of the function to find parameters
-      const funcChildren = visitChildren(funcDecl, () => {
-        return CXChildVisitResult.Continue;
-      });
+      // Use helper to find function parameters
+      const parmDecls = findFunctionParams(funcDecl);
 
       // Should have 3 ParmDecl
-      const parmDecls = funcChildren.filter((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.ParmDecl;
+      assertEquals(parmDecls.length, 3);
+    } finally {
+      await cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: "cursor - visitChildren Recurse descends into children",
+  async fn() {
+    const code = `
+      struct Point {
+        int x;
+        int y;
+      };
+    `;
+    const { tuCursor, cleanup } = await parseC(code);
+
+    try {
+      // Get the children buffers - visitChildren returns buffers
+      const children = visitChildren(
+        tuCursor,
+        () => CXChildVisitResult.Recurse,
+      );
+
+      // Find struct decl in children
+      const structDecl = children.find((buffer) => {
+        const kind = getCursorKind(
+          buffer as unknown as Parameters<typeof getCursorKind>[0],
+        );
+        return kind === CXCursorKind.StructDecl;
+      });
+      assertExists(structDecl);
+
+      // Visit the struct's children (the fields)
+      const structChildren = visitChildren(
+        structDecl as unknown as Parameters<typeof visitChildren>[0],
+        () => CXChildVisitResult.Continue,
+      );
+
+      // Should have visited: TU -> StructDecl -> FieldDecl (x) -> FieldDecl (y)
+      // With Recurse on TU, we should see StructDecl
+      // Then visit StructDecl's children to find fields
+      const fieldDecls = structChildren.filter((buffer) => {
+        const kind = getCursorKind(
+          buffer as unknown as Parameters<typeof getCursorKind>[0],
+        );
+        return kind === CXCursorKind.FieldDecl;
       });
 
-      assertEquals(parmDecls.length, 3);
-
-      disposeTranslationUnit(result.translationUnit);
+      assertEquals(fieldDecls.length, 2); // x and y
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
+    }
+  },
+});
+
+Deno.test({
+  name: "cursor - buffer round-trip from visitChildren",
+  async fn() {
+    const { tuCursor, cleanup } = await parseC(`int my_global = 42;`);
+
+    try {
+      // Get buffers from visitChildren
+      const children = visitChildren(
+        tuCursor,
+        () => CXChildVisitResult.Continue,
+      );
+
+      // Verify each buffer can be used with getCursorKind
+      for (const buffer of children) {
+        const kind = getCursorKind(
+          buffer as unknown as Parameters<typeof getCursorKind>[0],
+        );
+        assertExists(kind);
+        assertEquals(kind > 0, true);
+
+        // Verify spelling works on buffer
+        const spelling = getCursorSpellingFromBuffer(
+          buffer as unknown as Parameters<
+            typeof getCursorSpellingFromBuffer
+          >[0],
+        );
+        assertExists(spelling);
+
+        // If it's a VarDecl, verify USR works
+        if (kind === CXCursorKind.VarDecl) {
+          const usr = getCursorUSR(
+            buffer as unknown as Parameters<typeof getCursorUSR>[0],
+          );
+          assertExists(usr);
+        }
+      }
+    } finally {
+      await cleanup();
     }
   },
 });

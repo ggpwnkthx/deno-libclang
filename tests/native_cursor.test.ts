@@ -4,6 +4,7 @@
 
 import { assertEquals, assertExists } from "@std/assert";
 import { NativeCXCursor } from "../src/libclang/native_cursor.ts";
+import { CX_CURSOR_SIZE } from "../src/utils/ffi.ts";
 
 Deno.test({
   name: "nativeCursor - constructor and getBuffer",
@@ -12,7 +13,7 @@ Deno.test({
     const buffer = cursor.getBuffer();
 
     assertExists(buffer);
-    assertEquals(buffer.length, 40);
+    assertEquals(buffer.length, CX_CURSOR_SIZE);
   },
 });
 

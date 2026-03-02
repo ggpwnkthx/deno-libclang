@@ -41,7 +41,9 @@ export {
 // Type functions
 export {
   getArgType,
+  getAtomicValueType,
   getCursorType,
+  getNamedType,
   getNumArgTypes,
   getPointeeType,
   getPointerDepth,

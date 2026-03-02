@@ -82,8 +82,8 @@ export type CXDiagnostic = NativePointer;
 export type CXString = {
   /** NativePointer to string data */
   data: NativePointer;
-  /** String length */
-  length: number;
+  /** Private flags (u32 in v20) */
+  private_flags: number;
 };
 
 /** Represents an unsaved (in-memory) file */
@@ -302,9 +302,9 @@ export enum CXTypeKind {
   DependentSizedArray = 116,
   MemberNativePointer = 117,
   Auto = 118,
-  Attributed = 121,
+  Elaborated = 119,
   Opaque = 122,
-  Elaborated = 149,
+  Attributed = 163,
 }
 
 // ============================================================================
@@ -422,10 +422,10 @@ export enum CXTranslationUnit_Flags {
  * Return values for cursor visitor callbacks
  */
 export enum CXChildVisitResult {
-  /** Continue traversing */
-  Continue = 0,
   /** Terminate traversal */
-  Break = 1,
+  Break = 0,
+  /** Continue traversing */
+  Continue = 1,
   /** Continue traversing but ignore siblings */
   Recurse = 2,
 }
@@ -547,6 +547,15 @@ export interface LibclangSymbols {
   clang_getCursorKindSpelling: (kind: number) => CXString;
   clang_getCursorLocation: (cursor: CXCursor) => CXSourceLocation;
   clang_getCursorExtent: (cursor: CXCursor) => CXSourceRange;
+  // Extract file, line, column, and offset from a CXSourceLocation
+  // Uses output parameters: file, line, column, offset are all output pointers
+  clang_getSpellingLocation: (
+    location: CXSourceLocation,
+    file: NativePointer,
+    line: NativePointer,
+    column: NativePointer,
+    offset: NativePointer,
+  ) => void;
   clang_visitChildren: (
     cursor: CXCursor,
     visitor: NativePointer,
@@ -602,8 +611,12 @@ export interface LibclangSymbols {
   // Typedef resolution
   clang_getTypedefDeclUnderlyingType: (cursor: CXCursor) => CXType;
 
-  // Type decomposition - get value type from elaborated types
+  // Type decomposition - get value type from atomic types
   clang_Type_getValueType: (type: CXType) => CXType;
+  // Get named type from elaborated type
+  clang_Type_getNamedType: (type: CXType) => CXType;
+  // Check if type has const qualifier
+  clang_isConstQualifiedType?: (type: CXType) => number;
 
   // Function result type
   clang_getResultType: (type: CXType) => CXType;
@@ -619,9 +632,15 @@ export interface LibclangSymbols {
   clang_getCursorUSR: (cursor: CXCursor) => CXString;
 
   // Source location functions
+  // v20 signature: void clang_getInstantiationLocation(CXSourceLocation location,
+  //   CXFile *file, unsigned *line, unsigned *column, unsigned *offset);
   clang_getInstantiationLocation: (
     location: CXSourceLocation,
-  ) => CXSourceLocation;
+    file: NativePointer,
+    line: NativePointer,
+    column: NativePointer,
+    offset: NativePointer,
+  ) => void;
   clang_getDiagnosticLocation: (
     diagnostic: CXDiagnostic,
   ) => CXSourceLocation;

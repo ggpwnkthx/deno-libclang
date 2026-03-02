@@ -4,55 +4,32 @@
 
 import { assertEquals, assertExists } from "@std/assert";
 import {
-  createIndex,
-  CXChildVisitResult,
   CXCursorKind,
   CXTypeKind,
-  disposeIndex,
-  disposeTranslationUnit,
   getArgType,
   getCursorType,
   getNumArgTypes,
   getPointeeType,
   getResultType,
-  getTranslationUnitCursor,
-  getTypedefUnderlyingType,
   getTypeKind,
   getTypeKindSpelling,
   getTypeSpelling,
   getValueType,
   load,
-  parseTranslationUnit,
   unload,
-  visitChildren,
 } from "../mod.ts";
+import { findCursorByKind, parseC } from "./test_utils.ts";
 
 Deno.test({
   name: "type - get cursor type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x = 5;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int x = 5;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const cursor = getTranslationUnitCursor(result.translationUnit);
-      const type = getCursorType(cursor);
-
+      const type = getCursorType(tuCursor);
       assertExists(type);
       assertEquals(typeof type.kind, "number");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -60,30 +37,14 @@ Deno.test({
 Deno.test({
   name: "type - get type kind",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int x;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const cursor = getTranslationUnitCursor(result.translationUnit);
-      const type = getCursorType(cursor);
-
+      const type = getCursorType(tuCursor);
       // The TU cursor's type is always Invalid (kind=0)
       const typeKind = getTypeKind(type);
       assertEquals(typeKind, CXTypeKind.Invalid);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -91,46 +52,16 @@ Deno.test({
 Deno.test({
   name: "type - get type spelling",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int x;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int x;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      // Get the translation unit cursor
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // Visit children and collect all - we'll filter by kind directly from buffer
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find the VarDecl cursor from children by inspecting buffer directly
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Now get the type using the buffer
       const type = getCursorType(varDecl);
-
       const spelling = getTypeSpelling(type);
       assertEquals(spelling, "int");
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -139,76 +70,42 @@ Deno.test({
   name: "type - get type kind spelling",
   fn() {
     load();
+    try {
+      // In LLVM 20, CXTypeKind enum values shifted
+      // CXTypeKind.Int = 12 returns "UInt128" in LLVM 20
+      const spelling = getTypeKindSpelling(CXTypeKind.Int);
+      assertExists(spelling);
+      assertEquals(typeof spelling, "string");
+      assertEquals(spelling.length > 0, true);
 
-    // In LLVM 20, CXTypeKind enum values shifted
-    // CXTypeKind.Int = 12 returns "UInt128" in LLVM 20
-    // Let's check what value gives us "int"
-    const spelling = getTypeKindSpelling(CXTypeKind.Int);
-    // Log to see what we get
-    console.log("CXTypeKind.Int =", CXTypeKind.Int, "->", spelling);
+      // Test another type kind spelling
+      const pointerSpelling = getTypeKindSpelling(CXTypeKind.Pointer);
+      assertExists(pointerSpelling);
+      assertEquals(pointerSpelling.length > 0, true);
 
-    // Add assertion - spelling should be a non-empty string
-    assertExists(spelling);
-    assertEquals(typeof spelling, "string");
-    assertEquals(spelling.length > 0, true);
-
-    // Test another type kind spelling
-    const pointerSpelling = getTypeKindSpelling(CXTypeKind.Pointer);
-    assertExists(pointerSpelling);
-    assertEquals(pointerSpelling.length > 0, true);
-
-    // Test void spelling
-    const voidSpelling = getTypeKindSpelling(CXTypeKind.Void);
-    assertExists(voidSpelling);
-    assertEquals(voidSpelling.length > 0, true);
-
-    unload();
+      // Test void spelling
+      const voidSpelling = getTypeKindSpelling(CXTypeKind.Void);
+      assertExists(voidSpelling);
+      assertEquals(voidSpelling.length > 0, true);
+    } finally {
+      unload();
+    }
   },
 });
 
 Deno.test({
   name: "type - struct type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `struct Point { int x; int y; };`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      // Get the translation unit cursor
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // Visit children and collect all - we'll filter by kind directly from buffer
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find the StructDecl cursor from children by inspecting buffer directly
-      const structDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.StructDecl;
-      });
-
+      const structDecl = findCursorByKind(tuCursor, CXCursorKind.StructDecl);
       assertExists(structDecl, "Expected to find StructDecl cursor");
 
-      // Now get the type using the buffer
       const type = getCursorType(structDecl);
-
       const typeKind = getTypeKind(type);
       assertEquals(typeKind, CXTypeKind.Record);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -216,47 +113,16 @@ Deno.test({
 Deno.test({
   name: "type - pointer type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int* ptr;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int* ptr;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      // Get the translation unit cursor
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-
-      // Visit children and collect all - we'll filter by kind directly from buffer
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find the VarDecl cursor from children by inspecting buffer directly
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Now get the type using the buffer
       const type = getCursorType(varDecl);
-
-      // The type should be a pointer type
       const typeKind = getTypeKind(type);
       assertEquals(typeKind, CXTypeKind.Pointer);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -264,42 +130,17 @@ Deno.test({
 Deno.test({
   name: "type - getTypedefUnderlyingType",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `typedef int MyInt;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`typedef int MyInt;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find TypedefDecl cursor
-      const typedefDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.TypedefDecl;
-      });
-
+      const typedefDecl = findCursorByKind(tuCursor, CXCursorKind.TypedefDecl);
       assertExists(typedefDecl, "Expected to find TypedefDecl cursor");
 
-      // Get underlying type
+      const { getTypedefUnderlyingType } = await import("../mod.ts");
       const underlyingType = getTypedefUnderlyingType(typedefDecl);
       const typeKind = getTypeKind(underlyingType);
       assertEquals(typeKind, CXTypeKind.Int);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -307,60 +148,28 @@ Deno.test({
 Deno.test({
   name: "type - getValueType with elaborated type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    // Use typedef to create a type that might be elaborated
     const code = `
       typedef int my_int;
       my_int x = 5;
     `;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(code);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl for 'x'
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type and try getValueType
       const type = getCursorType(varDecl);
       const typeKind = getTypeKind(type);
       const valueType = getValueType(type);
 
       assertExists(valueType);
-      // Use typeKind in assertion to avoid unused variable
       assertEquals(typeof typeKind, "number");
-      // The valueType should have a valid kind
       assertEquals(typeof valueType.kind, "number");
 
-      // For typedef types, the value type should be the underlying type (int)
-      // Check that valueType has a kind
       const valueTypeKind = getTypeKind(valueType);
       assertEquals(typeof valueTypeKind, "number");
-
-      // Even for non-elaborated types, getValueType should return something valid
       assertEquals(valueTypeKind >= 0, true);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -368,44 +177,16 @@ Deno.test({
 Deno.test({
   name: "type - getNumArgTypes",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int add(int a, int b, int c);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int add(int a, int b, int c);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
-
-      // Get number of argument types - should be 3
       const numArgs = getNumArgTypes(type);
       assertEquals(numArgs, 3);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -413,50 +194,22 @@ Deno.test({
 Deno.test({
   name: "type - getArgType",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int add(int a, int b, int c);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int add(int a, int b, int c);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
 
-      // Get arg type at index 0
       const argType0 = getArgType(type, 0);
       const kind0 = getTypeKind(argType0);
       assertEquals(kind0, CXTypeKind.Int);
 
-      // Get arg type at index 1
       const argType1 = getArgType(type, 1);
       const kind1 = getTypeKind(argType1);
       assertEquals(kind1, CXTypeKind.Int);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -464,45 +217,17 @@ Deno.test({
 Deno.test({
   name: "type - getResultType",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int add(int a, int b);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int add(int a, int b);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
-
-      // Get result type - should be int
       const resultType = getResultType(type);
       const resultKind = getTypeKind(resultType);
       assertEquals(resultKind, CXTypeKind.Int);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -510,45 +235,17 @@ Deno.test({
 Deno.test({
   name: "type - getPointeeType",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int* ptr;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int* ptr;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type (pointer type)
       const type = getCursorType(varDecl);
-
-      // Get pointee type - should be int
       const pointeeType = getPointeeType(type);
       const pointeeKind = getTypeKind(pointeeType);
       assertEquals(pointeeKind, CXTypeKind.Int);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -556,44 +253,17 @@ Deno.test({
 Deno.test({
   name: "type - getArgType with out of bounds index",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int add(int a, int b);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int add(int a, int b);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
+      assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
-      if (funcDecl) {
-        const type = getCursorType(funcDecl);
-        // Try to get arg type at out of bounds index - should return invalid type
-        const argType = getArgType(type, 100);
-        const kind = getTypeKind(argType);
-        // Invalid index typically returns Void or Invalid type
-        assertEquals(typeof kind, "number");
-      }
-
-      disposeTranslationUnit(result.translationUnit);
+      const type = getCursorType(funcDecl);
+      const argType = getArgType(type, 100);
+      const kind = getTypeKind(argType);
+      assertEquals(typeof kind, "number");
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -605,33 +275,11 @@ Deno.test({
 Deno.test({
   name: "type - getPointeeType with double pointer",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int** ptr;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int** ptr;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type (pointer to pointer type)
       const type = getCursorType(varDecl);
 
       // First pointee should be pointer
@@ -643,12 +291,8 @@ Deno.test({
       const pointeeType2 = getPointeeType(pointeeType);
       const pointeeKind2 = getTypeKind(pointeeType2);
       assertEquals(pointeeKind2, CXTypeKind.Int);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -656,45 +300,17 @@ Deno.test({
 Deno.test({
   name: "type - getResultType with void return",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `void test(void);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`void test(void);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
-
-      // Get result type - should be void
       const resultType = getResultType(type);
       const resultKind = getTypeKind(resultType);
       assertEquals(resultKind, CXTypeKind.Void);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -702,45 +318,17 @@ Deno.test({
 Deno.test({
   name: "type - getResultType with pointer return",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int* getptr(void);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int* getptr(void);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
-
-      // Get result type - should be pointer
       const resultType = getResultType(type);
       const resultKind = getTypeKind(resultType);
       assertEquals(resultKind, CXTypeKind.Pointer);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -748,44 +336,16 @@ Deno.test({
 Deno.test({
   name: "type - array type detection",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int arr[10];`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int arr[10];`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(varDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be ConstantArray type
       assertEquals(typeKind, CXTypeKind.ConstantArray);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -793,49 +353,20 @@ Deno.test({
 Deno.test({
   name: "type - incomplete array type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `int arr[];`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`int arr[];`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(varDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be either ConstantArray or IncompleteArray depending on libclang version
-      // Both are array types
       assertEquals(
         typeKind === CXTypeKind.ConstantArray ||
           typeKind === CXTypeKind.IncompleteArray,
         true,
       );
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -843,44 +374,16 @@ Deno.test({
 Deno.test({
   name: "type - function type with no parameters",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `void test();`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`void test();`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be FunctionNoProto
       assertEquals(typeKind, CXTypeKind.FunctionNoProto);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -888,44 +391,16 @@ Deno.test({
 Deno.test({
   name: "type - function type with prototype",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `void test(int a, int b);`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`void test(int a, int b);`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find FunctionDecl cursor
-      const funcDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.FunctionDecl;
-      });
-
+      const funcDecl = findCursorByKind(tuCursor, CXCursorKind.FunctionDecl);
       assertExists(funcDecl, "Expected to find FunctionDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(funcDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be FunctionProto
       assertEquals(typeKind, CXTypeKind.FunctionProto);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -933,44 +408,16 @@ Deno.test({
 Deno.test({
   name: "type - long type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `long x;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`long x;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(varDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be Long
       assertEquals(typeKind, CXTypeKind.Long);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -978,44 +425,16 @@ Deno.test({
 Deno.test({
   name: "type - long long type",
   async fn() {
-    load();
-
-    const index = createIndex();
-    const code = `long long x;`;
-
-    const file = await Deno.makeTempFile({ suffix: ".c" });
-    await Deno.writeTextFile(file, code);
-
+    const { tuCursor, cleanup } = await parseC(`long long x;`);
     try {
-      const result = parseTranslationUnit(index, file);
-      assertExists(result.translationUnit);
-
-      const tuCursor = getTranslationUnitCursor(result.translationUnit);
-      const children = visitChildren(tuCursor, () => {
-        return CXChildVisitResult.Continue;
-      });
-
-      // Find VarDecl cursor
-      const varDecl = children.find((buffer) => {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
-        const kind = view.getUint32(0, true);
-        return kind === CXCursorKind.VarDecl;
-      });
-
+      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
       assertExists(varDecl, "Expected to find VarDecl cursor");
 
-      // Get cursor type
       const type = getCursorType(varDecl);
       const typeKind = getTypeKind(type);
-
-      // Should be LongLong
       assertEquals(typeKind, CXTypeKind.LongLong);
-
-      disposeTranslationUnit(result.translationUnit);
     } finally {
-      disposeIndex(index);
-      await Deno.remove(file);
-      unload();
+      await cleanup();
     }
   },
 });
@@ -1023,11 +442,9 @@ Deno.test({
 Deno.test({
   name: "type - typeKindToFFI with uint types",
   async fn() {
-    // Import typeKindToFFI directly from the module
     const { typeKindToFFI, CXTypeKind } = await import("../mod.ts");
 
-    // Test case 1: SChar with uint8_t spelling (the bug case)
-    // This simulates libclang misreporting uint8_t as SChar
+    // Test case 1: SChar with uint8_t spelling
     const result1 = typeKindToFFI(CXTypeKind.SChar, "uint8_t");
     assertEquals(result1, "u8", "SChar with uint8_t spelling should return u8");
 
@@ -1035,7 +452,7 @@ Deno.test({
     const result2 = typeKindToFFI(CXTypeKind.SChar, "signed char");
     assertEquals(result2, "i8", "SChar with signed char spelling should return i8");
 
-    // Test case 3: Short with uint16_t spelling (the bug case)
+    // Test case 3: Short with uint16_t spelling
     const result3 = typeKindToFFI(CXTypeKind.Short, "uint16_t");
     assertEquals(result3, "u16", "Short with uint16_t spelling should return u16");
 
@@ -1043,7 +460,7 @@ Deno.test({
     const result4 = typeKindToFFI(CXTypeKind.Short, "short");
     assertEquals(result4, "i16", "Short with short spelling should return i16");
 
-    // Test case 5: Int with uint32_t spelling (the bug case)
+    // Test case 5: Int with uint32_t spelling
     const result5 = typeKindToFFI(CXTypeKind.Int, "uint32_t");
     assertEquals(result5, "u32", "Int with uint32_t spelling should return u32");
 
@@ -1062,5 +479,108 @@ Deno.test({
     // Test case 9: UInt should still work correctly
     const result9 = typeKindToFFI(CXTypeKind.UInt, "unsigned int");
     assertEquals(result9, "u32", "UInt should return u32");
+  },
+});
+
+// ============================================================================
+// Helper function tests (no libclang needed)
+// ============================================================================
+
+Deno.test({
+  name: "type - isCharPointerType helper",
+  async fn() {
+    const { isCharPointerType } = await import("../src/libclang/type.ts");
+
+    assertEquals(isCharPointerType("char*"), true);
+    assertEquals(isCharPointerType("const char*"), true);
+    assertEquals(isCharPointerType("char**"), true);
+    assertEquals(isCharPointerType("const char**"), true);
+    assertEquals(isCharPointerType("char *"), true);
+    assertEquals(isCharPointerType("  const   char  *  "), true);
+
+    assertEquals(isCharPointerType("wchar_t*"), false);
+    assertEquals(isCharPointerType("char16_t*"), false);
+    assertEquals(isCharPointerType("char32_t*"), false);
+    assertEquals(isCharPointerType("int*"), false);
+    assertEquals(isCharPointerType("void*"), false);
+    assertEquals(isCharPointerType("char"), false);
+  },
+});
+
+Deno.test({
+  name: "type - isVoidPointerType helper",
+  async fn() {
+    const { isVoidPointerType } = await import("../src/libclang/type.ts");
+
+    assertEquals(isVoidPointerType("void*"), true);
+    assertEquals(isVoidPointerType("const void*"), true);
+    assertEquals(isVoidPointerType("void**"), true);
+    assertEquals(isVoidPointerType("const void**"), true);
+    assertEquals(isVoidPointerType("void"), false);
+  },
+});
+
+Deno.test({
+  name: "type - getPointerDepth helper",
+  async fn() {
+    const { getPointerDepth } = await import("../src/libclang/type.ts");
+
+    assertEquals(getPointerDepth("char"), 0);
+    assertEquals(getPointerDepth("char*"), 1);
+    assertEquals(getPointerDepth("char**"), 2);
+    assertEquals(getPointerDepth("const char***"), 3);
+    assertEquals(getPointerDepth("int****"), 4);
+    assertEquals(getPointerDepth("void*"), 1);
+    assertEquals(getPointerDepth("const void**"), 2);
+  },
+});
+
+Deno.test({
+  name: "type - typeKindToFFI substring edge cases",
+  async fn() {
+    const { typeKindToFFI } = await import("../src/libclang/type.ts");
+    const { CXTypeKind } = await import("../mod.ts");
+
+    // These were previously buggy - "uint16_t" was being matched as "int16"
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "uint16_t"), "u16");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "uint32_t"), "u32");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "uint64_t"), "u64");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "uint8_t"), "u8");
+
+    // Make sure int types still work
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "int16_t"), "i16");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "int32_t"), "i32");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "int64_t"), "i64");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "int8_t"), "i8");
+
+    // Without _t suffix
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "uint16"), "u16");
+    assertEquals(typeKindToFFI(CXTypeKind.Elaborated, "int16"), "i16");
+
+    // Default case (fallback spelling check)
+    assertEquals(typeKindToFFI(CXTypeKind.Invalid, "uint16_t"), "u16");
+    assertEquals(typeKindToFFI(CXTypeKind.Invalid, "int16_t"), "i16");
+  },
+});
+
+Deno.test({
+  name: "type - typeKindToFFI Long on Windows",
+  async fn() {
+    const { typeKindToFFI } = await import("../src/libclang/type.ts");
+    const { CXTypeKind } = await import("../mod.ts");
+
+    const longResult = typeKindToFFI(CXTypeKind.Long, "");
+    const ulongResult = typeKindToFFI(CXTypeKind.ULong, "");
+
+    if (Deno.build.os === "windows") {
+      assertEquals(longResult, "i32", "Long should be i32 on Windows");
+      assertEquals(ulongResult, "u32", "ULong should be u32 on Windows");
+    } else if (Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64") {
+      assertEquals(longResult, "i64", "Long should be i64 on 64-bit Unix");
+      assertEquals(ulongResult, "u64", "ULong should be u64 on 64-bit Unix");
+    } else {
+      assertEquals(longResult, "i32", "Long should be i32 on 32-bit Unix");
+      assertEquals(ulongResult, "u32", "ULong should be u32 on 32-bit Unix");
+    }
   },
 });

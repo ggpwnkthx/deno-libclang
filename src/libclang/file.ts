@@ -10,6 +10,7 @@ import type {
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { cxStringToString } from "./helpers.ts";
+import { POINTER_SIZE, readPtr } from "../utils/ffi.ts";
 
 /**
  * Get a file from a translation unit
@@ -82,9 +83,9 @@ export function getLocation(
       result.byteLength,
     );
     // CXSourceLocation: { ptr_data: [pointer, pointer], int_data: u32 }
-    const ptr0 = view.getBigUint64(0, true);
-    const ptr1 = view.getBigUint64(8, true);
-    const int_data = view.getUint32(16, true);
+    const ptr0 = readPtr(view, 0);
+    const ptr1 = readPtr(view, POINTER_SIZE);
+    const int_data = view.getUint32(POINTER_SIZE * 2, true);
 
     return {
       ptr_data: [
