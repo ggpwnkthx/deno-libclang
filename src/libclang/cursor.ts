@@ -125,25 +125,29 @@ export function visitChildren(
   // Create the native callback
   const visitorPtr = createVisitorCallback();
 
-  sym.clang_visitChildren(
-    toNativeCursor(cursor),
-    visitorPtr,
-    null as unknown as Deno.PointerValue,
-  );
+  let buffers: Uint8Array[] = [];
 
-  // Clean up the callback to prevent memory leak
-  if (
-    currentCallback && typeof currentCallback === "object" &&
-    "close" in currentCallback
-  ) {
-    (currentCallback as { close: () => void }).close();
-    currentCallback = null;
+  try {
+    sym.clang_visitChildren(
+      toNativeCursor(cursor),
+      visitorPtr,
+      null as unknown as Deno.PointerValue,
+    );
+  } finally {
+    // Clean up the callback to prevent memory leak
+    if (
+      currentCallback && typeof currentCallback === "object" &&
+      "close" in currentCallback
+    ) {
+      (currentCallback as { close: () => void }).close();
+      currentCallback = null;
+    }
+
+    // Get collected cursor buffers and clean up
+    buffers = getCollectedCursorBuffers();
+    clearCollectedCursors();
+    setVisitor(null);
   }
-
-  // Get collected cursor buffers and clean up
-  const buffers = getCollectedCursorBuffers();
-  clearCollectedCursors();
-  setVisitor(null);
 
   // Return the raw buffers - these can be passed to FFI functions like getCursorType
   return buffers;

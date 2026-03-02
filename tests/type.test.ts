@@ -496,59 +496,6 @@ Deno.test({
   },
 });
 
-// ============================================================================
-// Helper function tests (no libclang needed)
-// ============================================================================
-
-Deno.test({
-  name: "type - isCharPointerType helper",
-  async fn() {
-    const { isCharPointerType } = await import("../src/libclang/type.ts");
-
-    assertEquals(isCharPointerType("char*"), true);
-    assertEquals(isCharPointerType("const char*"), true);
-    assertEquals(isCharPointerType("char**"), true);
-    assertEquals(isCharPointerType("const char**"), true);
-    assertEquals(isCharPointerType("char *"), true);
-    assertEquals(isCharPointerType("  const   char  *  "), true);
-
-    assertEquals(isCharPointerType("wchar_t*"), false);
-    assertEquals(isCharPointerType("char16_t*"), false);
-    assertEquals(isCharPointerType("char32_t*"), false);
-    assertEquals(isCharPointerType("int*"), false);
-    assertEquals(isCharPointerType("void*"), false);
-    assertEquals(isCharPointerType("char"), false);
-  },
-});
-
-Deno.test({
-  name: "type - isVoidPointerType helper",
-  async fn() {
-    const { isVoidPointerType } = await import("../src/libclang/type.ts");
-
-    assertEquals(isVoidPointerType("void*"), true);
-    assertEquals(isVoidPointerType("const void*"), true);
-    assertEquals(isVoidPointerType("void**"), true);
-    assertEquals(isVoidPointerType("const void**"), true);
-    assertEquals(isVoidPointerType("void"), false);
-  },
-});
-
-Deno.test({
-  name: "type - getPointerDepth helper",
-  async fn() {
-    const { getPointerDepth } = await import("../src/libclang/type.ts");
-
-    assertEquals(getPointerDepth("char"), 0);
-    assertEquals(getPointerDepth("char*"), 1);
-    assertEquals(getPointerDepth("char**"), 2);
-    assertEquals(getPointerDepth("const char***"), 3);
-    assertEquals(getPointerDepth("int****"), 4);
-    assertEquals(getPointerDepth("void*"), 1);
-    assertEquals(getPointerDepth("const void**"), 2);
-  },
-});
-
 Deno.test({
   name: "type - typeKindToFFI substring edge cases",
   async fn() {

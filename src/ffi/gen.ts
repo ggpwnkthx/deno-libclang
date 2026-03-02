@@ -12,6 +12,7 @@ import {
   getCursorSpelling,
   getCursorType,
   getCursorUSR,
+  getNamedType,
   getNumArgTypes,
   getPointeeType,
   getResultType,
@@ -301,12 +302,10 @@ function lowerTypeToFFI(
       }
     }
     case CXTypeKind.Elaborated: {
-      // Get the underlying value type
-      const valueType = type instanceof Uint8Array
-        ? getPointeeType(type) // Elaborated types use pointer-like access
-        : getPointeeType(type);
+      // Get the underlying named type using clang_Type_getNamedType
+      const namedType = getNamedType(type);
       return lowerTypeToFFI(
-        valueType,
+        namedType,
         options,
         structs,
         depth + 1,
@@ -455,7 +454,7 @@ function getStructFields(
 }
 
 function getKindFromBuffer(buffer: Uint8Array): CXCursorKind {
-  const view = new DataView(buffer.buffer, buffer.byteOffset, 40);
+  const view = new DataView(buffer.buffer, buffer.byteOffset, 4);
   return view.getUint32(0, true) as CXCursorKind;
 }
 

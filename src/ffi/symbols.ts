@@ -73,7 +73,7 @@ export function getLibclangSymbols(): LibclangSymbols {
     // This uses output pointers, so we need to pass pointers to store the results
     clang_getSpellingLocation: {
       parameters: [
-        { struct: ["pointer", "pointer", "u32", "u32"] }, // location (with padding)
+        { struct: ["pointer", "pointer", "u32"] }, // location (2 pointers + u32)
         "pointer", // file output
         "pointer", // line output
         "pointer", // column output
@@ -166,11 +166,13 @@ export function getLibclangSymbols(): LibclangSymbols {
     } as unknown as LibclangSymbols["clang_getLocation"],
     clang_getRangeStart: {
       parameters: [{ struct: ["pointer", "pointer", "u32", "u32"] }],
-      result: { struct: ["pointer", "pointer", "u32", "u32"] },
+      // CXSourceRange returns CXSourceLocation (2 pointers + u32)
+      result: { struct: ["pointer", "pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getRangeStart"],
     clang_getRangeEnd: {
       parameters: [{ struct: ["pointer", "pointer", "u32", "u32"] }],
-      result: { struct: ["pointer", "pointer", "u32", "u32"] },
+      // CXSourceRange returns CXSourceLocation (2 pointers + u32)
+      result: { struct: ["pointer", "pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getRangeEnd"],
     clang_getFileName: {
       parameters: ["pointer"],

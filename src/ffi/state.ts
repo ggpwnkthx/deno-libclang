@@ -4,6 +4,7 @@
  * Manages state for the clang_visitChildren callback system
  */
 
+import { readPtr, POINTER_SIZE } from "../utils/ffi.ts";
 import type { CursorVisitor, CXCursor } from "./types.ts";
 
 // Global state to store visitor function and collected cursor buffers
@@ -59,9 +60,9 @@ export function parseCursorBuffer(buffer: Uint8Array): CXCursor {
     kind: view.getUint32(0, true),
     xdata: view.getInt32(4, true),
     data: [
-      view.getBigUint64(8, true) as unknown as Deno.PointerValue,
-      view.getBigUint64(16, true) as unknown as Deno.PointerValue,
-      view.getBigUint64(24, true) as unknown as Deno.PointerValue,
+      readPtr(view, 8) as unknown as Deno.PointerValue,
+      readPtr(view, 8 + POINTER_SIZE) as unknown as Deno.PointerValue,
+      readPtr(view, 8 + POINTER_SIZE * 2) as unknown as Deno.PointerValue,
     ],
   };
 }
