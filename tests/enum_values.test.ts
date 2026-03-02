@@ -139,7 +139,8 @@ Deno.test({
 });
 
 Deno.test({
-  name: "visitChildren honors CXChildVisitResult numeric semantics (Break/Continue/Recurse)",
+  name:
+    "visitChildren honors CXChildVisitResult numeric semantics (Break/Continue/Recurse)",
   permissions: { ffi: true, read: true, write: true, env: true },
   async fn() {
     // TU has 3 top-level VarDecls and one function with nested nodes.
@@ -172,14 +173,20 @@ Deno.test({
 
       // 3) Recurse (=2) should traverse *into* children when used on a non-leaf.
       // Get the list of child buffers and find the FunctionDecl buffer.
-      const children = visitChildren(tuCursor, () => CXChildVisitResult.Continue);
+      const children = visitChildren(
+        tuCursor,
+        () => CXChildVisitResult.Continue,
+      );
       const funcBuffer = children.find((buffer) => {
         const kind = getCursorKind(
           buffer as unknown as Parameters<typeof getCursorKind>[0],
         );
         return kind === CXCursorKind.FunctionDecl;
       });
-      assert(funcBuffer !== undefined, "Expected to find a FunctionDecl buffer");
+      assert(
+        funcBuffer !== undefined,
+        "Expected to find a FunctionDecl buffer",
+      );
 
       // Direct children count (Continue only)
       let directCount = 0;

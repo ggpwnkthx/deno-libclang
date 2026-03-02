@@ -8,10 +8,21 @@ C/C++/Objective-C source code.
 ## Prerequisites
 
 - [Deno](https://deno.land/) runtime
-- libclang installed on your system:
-  - Linux: `apt install libclang-dev` or equivalent
-  - macOS: `brew install llvm`
-  - Windows: Install LLVM
+- libclang v20+ installed on your system:
+  - Linux: `bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"` or install LLVM 20
+  - macOS: `brew install llvm@20`
+  - Windows: Install LLVM 20
+
+## Debugging
+
+If you encounter issues, you can check the loaded libclang version:
+
+```typescript
+import { getVersion, load } from "@ggpwnkthx/libclang";
+
+load();
+console.log(getVersion()); // e.g., "LLVM version 20.0.0"
+```
 
 ## Usage
 
@@ -22,6 +33,7 @@ import {
   CXCursorKind,
   disposeIndex,
   disposeTranslationUnit,
+  getCursorKind,
   getCursorKindSpelling,
   getCursorSpelling,
   load,
@@ -58,6 +70,7 @@ disposeIndex(index);
 | Module                         | Description                                  |
 | ------------------------------ | -------------------------------------------- |
 | `load` / `unload`              | Load/unload the libclang library             |
+| `getVersion`                   | Get libclang version string (for debugging)  |
 | `createIndex` / `disposeIndex` | Create/dispose CXIndex (compilation context) |
 | `parseTranslationUnit`         | Parse C/C++ source files into AST            |
 | `visitChildren`                | Navigate AST nodes with a visitor callback   |

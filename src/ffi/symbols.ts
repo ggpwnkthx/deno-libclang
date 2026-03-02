@@ -289,5 +289,11 @@ export function getLibclangSymbols(): LibclangSymbols {
       }],
       result: "i64",
     } as unknown as LibclangSymbols["clang_Type_getAlignOf"],
+
+    // Version information
+    clang_getClangVersion: {
+      parameters: [],
+      result: { struct: ["pointer", "u32"] },
+    } as unknown as LibclangSymbols["clang_getClangVersion"],
   };
 }

@@ -96,7 +96,9 @@ Deno.test({
 Deno.test({
   name: "type - struct type",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
+    const { tuCursor, cleanup } = await parseC(
+      `struct Point { int x; int y; };`,
+    );
     try {
       const structDecl = findCursorByKind(tuCursor, CXCursorKind.StructDecl);
       assertExists(structDecl, "Expected to find StructDecl cursor");
@@ -450,11 +452,19 @@ Deno.test({
 
     // Test case 2: SChar with regular signed char spelling
     const result2 = typeKindToFFI(CXTypeKind.SChar, "signed char");
-    assertEquals(result2, "i8", "SChar with signed char spelling should return i8");
+    assertEquals(
+      result2,
+      "i8",
+      "SChar with signed char spelling should return i8",
+    );
 
     // Test case 3: Short with uint16_t spelling
     const result3 = typeKindToFFI(CXTypeKind.Short, "uint16_t");
-    assertEquals(result3, "u16", "Short with uint16_t spelling should return u16");
+    assertEquals(
+      result3,
+      "u16",
+      "Short with uint16_t spelling should return u16",
+    );
 
     // Test case 4: Short with regular short spelling
     const result4 = typeKindToFFI(CXTypeKind.Short, "short");
@@ -462,7 +472,11 @@ Deno.test({
 
     // Test case 5: Int with uint32_t spelling
     const result5 = typeKindToFFI(CXTypeKind.Int, "uint32_t");
-    assertEquals(result5, "u32", "Int with uint32_t spelling should return u32");
+    assertEquals(
+      result5,
+      "u32",
+      "Int with uint32_t spelling should return u32",
+    );
 
     // Test case 6: Int with regular int spelling
     const result6 = typeKindToFFI(CXTypeKind.Int, "int");

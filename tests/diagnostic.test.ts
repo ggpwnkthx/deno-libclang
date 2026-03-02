@@ -42,7 +42,11 @@ Deno.test({
     try {
       const numDiags = getNumDiagnostics(tu);
       // Should have at least one diagnostic (warning or error)
-      assertEquals(numDiags >= 1, true, "Expected at least 1 diagnostic for invalid code");
+      assertEquals(
+        numDiags >= 1,
+        true,
+        "Expected at least 1 diagnostic for invalid code",
+      );
 
       const diagnostics = getDiagnostics(tu);
       assertEquals(Array.isArray(diagnostics), true);

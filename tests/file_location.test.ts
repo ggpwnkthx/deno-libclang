@@ -110,7 +110,11 @@ Deno.test({
       }[] = [];
 
       for (const buffer of children) {
-        const view = new DataView(buffer.buffer, buffer.byteOffset, CX_CURSOR_SIZE);
+        const view = new DataView(
+          buffer.buffer,
+          buffer.byteOffset,
+          CX_CURSOR_SIZE,
+        );
         const kind = view.getUint32(0, true);
         if (kind === CXCursorKind.VarDecl) {
           const spelling = getCursorSpelling(

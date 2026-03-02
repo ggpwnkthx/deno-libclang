@@ -648,4 +648,7 @@ export interface LibclangSymbols {
   // Type size and alignment
   clang_Type_getSizeOf: (type: CXType) => number;
   clang_Type_getAlignOf: (type: CXType) => number;
+
+  // Version information
+  clang_getClangVersion: () => CXString;
 }

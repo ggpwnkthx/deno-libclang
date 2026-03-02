@@ -95,7 +95,9 @@ export function requireLibclang(): void {
   try {
     load();
   } catch {
-    throw new Error("libclang not installed - install libclang-dev or equivalent");
+    throw new Error(
+      "libclang not installed - install libclang-dev or equivalent",
+    );
   }
 }
 
@@ -188,7 +190,12 @@ export async function parseC(
   const file = await Deno.makeTempFile({ suffix: ".c" });
   await Deno.writeTextFile(file, code);
 
-  const result = parseTranslationUnit(index, file, opts?.args ?? [], opts?.unsaved ?? []);
+  const result = parseTranslationUnit(
+    index,
+    file,
+    opts?.args ?? [],
+    opts?.unsaved ?? [],
+  );
   assertExists(result.translationUnit);
 
   const tuCursor = getTranslationUnitCursor(result.translationUnit);

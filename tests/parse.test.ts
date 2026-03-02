@@ -210,7 +210,11 @@ Deno.test({
       // Parse with unsaved file that overrides disk content
       const unsavedCode = `int x = 42;`;
       const result = parseTranslationUnit(index, "dummy.c", [], [
-        { filename: "dummy.c", contents: unsavedCode, length: unsavedCode.length },
+        {
+          filename: "dummy.c",
+          contents: unsavedCode,
+          length: unsavedCode.length,
+        },
       ]);
       assertExists(result.translationUnit);
 

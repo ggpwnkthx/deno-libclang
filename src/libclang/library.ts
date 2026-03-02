@@ -12,12 +12,62 @@ let libclang: unknown = null;
 let symbols: LibclangSymbols | null = null;
 
 /**
+ * Minimum required libclang major version
+ */
+const MIN_VERSION = 20;
+
+/**
  * Check if libclang is currently loaded
  *
  * @returns true if libclang is loaded, false otherwise
  */
 export function isLoaded(): boolean {
   return symbols !== null;
+}
+
+/**
+ * Get the libclang version string
+ *
+ * @returns The version string (e.g., "LLVM version 20.0.0")
+ * @throws Error if libclang is not loaded
+ */
+export function getVersion(): string {
+  if (!symbols) {
+    throw new Error("libclang not loaded. Call load() first.");
+  }
+
+  const cxVersion = symbols.clang_getClangVersion();
+  const cStr = symbols.clang_getCString(cxVersion);
+  const version = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  symbols.clang_disposeString(cxVersion);
+
+  return version;
+}
+
+/**
+ * Check that the loaded libclang version is at least v20
+ *
+ * @throws Error if libclang version is less than 20
+ */
+function checkVersion(): void {
+  const version = getVersion();
+
+  // Parse version from string like "LLVM version 20.0.0" or "clang version 20.0.0"
+  const match = version.match(/(\d+)\./);
+  if (!match) {
+    throw new Error(
+      `Unable to parse libclang version from "${version}". This library requires libclang v${MIN_VERSION}+.`,
+    );
+  }
+
+  const majorVersion = parseInt(match[1], 10);
+
+  if (majorVersion < MIN_VERSION) {
+    throw new Error(
+      `libclang v${majorVersion} detected, but this library requires v${MIN_VERSION}+. ` +
+        `Please install libclang v${MIN_VERSION} or higher.`,
+    );
+  }
 }
 
 /**
@@ -33,6 +83,27 @@ function loadLibclang(libPath: string | undefined): void {
     libclang = Deno.dlopen(actualPath, getLibclangSymbols());
     // @ts-ignore - symbols access - use any to bypass strict type checking for FFI
     symbols = libclang.symbols as unknown as LibclangSymbols;
+
+    // Check version after loading - unload if version check fails
+    try {
+      checkVersion();
+    } catch (versionError) {
+      // Close the library and clear symbols
+      if (libclang !== null) {
+        // @ts-ignore - Deno.dlopen signature
+        libclang.close();
+        libclang = null;
+        symbols = null;
+      }
+      // Re-throw with context
+      const originalError = versionError instanceof Error
+        ? versionError
+        : new Error(String(versionError));
+      throw new Error(
+        `libclang version check failed: ${originalError.message}`,
+        { cause: originalError },
+      );
+    }
   } catch (e) {
     // Preserve original error message and stack for better debugging
     const originalError = e instanceof Error ? e : new Error(String(e));

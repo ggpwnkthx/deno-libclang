@@ -278,7 +278,9 @@ Deno.test({
 Deno.test({
   name: "cursor - getCursorUSR",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
+    const { tuCursor, cleanup } = await parseC(
+      `struct Point { int x; int y; };`,
+    );
 
     try {
       const structDecl = findCursorByKind(tuCursor, CXCursorKind.StructDecl);
@@ -344,11 +346,16 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren returns Continue",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`int a = 1; int b = 2; int c = 3;`);
+    const { tuCursor, cleanup } = await parseC(
+      `int a = 1; int b = 2; int c = 3;`,
+    );
 
     try {
       // Using Continue should visit all children
-      const children = visitChildren(tuCursor, () => CXChildVisitResult.Continue);
+      const children = visitChildren(
+        tuCursor,
+        () => CXChildVisitResult.Continue,
+      );
 
       // Should find all 3 VarDecl
       const varDecls = findChildrenByKind(children, CXCursorKind.VarDecl);
@@ -362,7 +369,9 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren returns Break",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`int a = 1; int b = 2; int c = 3;`);
+    const { tuCursor, cleanup } = await parseC(
+      `int a = 1; int b = 2; int c = 3;`,
+    );
 
     try {
       // Using Break should stop after first child
@@ -393,13 +402,20 @@ Deno.test({
     const { tuCursor, cleanup } = await parseC(code);
 
     try {
-      const children = visitChildren(tuCursor, () => CXChildVisitResult.Continue);
+      const children = visitChildren(
+        tuCursor,
+        () => CXChildVisitResult.Continue,
+      );
 
       // Check we found different cursor kinds
-      const hasStruct = findChildrenByKind(children, CXCursorKind.StructDecl).length > 0;
-      const hasEnum = findChildrenByKind(children, CXCursorKind.EnumDecl).length > 0;
-      const hasFunc = findChildrenByKind(children, CXCursorKind.FunctionDecl).length > 0;
-      const hasVar = findChildrenByKind(children, CXCursorKind.VarDecl).length > 0;
+      const hasStruct =
+        findChildrenByKind(children, CXCursorKind.StructDecl).length > 0;
+      const hasEnum =
+        findChildrenByKind(children, CXCursorKind.EnumDecl).length > 0;
+      const hasFunc =
+        findChildrenByKind(children, CXCursorKind.FunctionDecl).length > 0;
+      const hasVar =
+        findChildrenByKind(children, CXCursorKind.VarDecl).length > 0;
 
       assertEquals(hasStruct, true);
       assertEquals(hasEnum, true);
@@ -414,7 +430,9 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren with struct fields",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`struct Point { int x; int y; };`);
+    const { tuCursor, cleanup } = await parseC(
+      `struct Point { int x; int y; };`,
+    );
 
     try {
       // Find the struct declaration
@@ -435,7 +453,9 @@ Deno.test({
 Deno.test({
   name: "cursor - visitChildren with enum values",
   async fn() {
-    const { tuCursor, cleanup } = await parseC(`enum Color { RED, GREEN, BLUE };`);
+    const { tuCursor, cleanup } = await parseC(
+      `enum Color { RED, GREEN, BLUE };`,
+    );
 
     try {
       // Find the enum declaration
