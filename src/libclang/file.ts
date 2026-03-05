@@ -6,11 +6,10 @@ import type {
   CXFile,
   CXSourceLocation,
   CXTranslationUnit,
-  NativePointer,
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { cxStringToString } from "./helpers.ts";
-import { POINTER_SIZE, readPtr } from "../utils/ffi.ts";
+import { bigintToPtrValue, POINTER_SIZE, readPtr } from "../utils/ffi.ts";
 
 /**
  * Get a file from a translation unit
@@ -89,8 +88,8 @@ export function getLocation(
 
     return {
       ptr_data: [
-        ptr0 as unknown as NativePointer,
-        ptr1 as unknown as NativePointer,
+        bigintToPtrValue(ptr0),
+        bigintToPtrValue(ptr1),
       ],
       int_data,
     };

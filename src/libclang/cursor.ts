@@ -14,7 +14,9 @@ import {
   clearCollectedCursors,
   getCollectedCursorBuffers,
   getVisitor,
-  setVisitor,
+  popVisitContext,
+  pushVisitContext,
+  shouldCollect,
 } from "../ffi/state.ts";
 import { getSymbols } from "./library.ts";
 import {
@@ -128,10 +130,14 @@ export function visitChildren(
   options?: VisitChildrenOptions,
 ): Uint8Array[] {
   const sym = getSymbols();
-  const shouldCollect = options?.collect ?? true;
+  const shouldCollectValue = options?.collect ?? true;
 
-  // Set the visitor function in global state
-  setVisitor(visitor);
+  // Push a new visit context onto the stack for re-entrant safety
+  pushVisitContext({
+    visitor,
+    collect: shouldCollectValue,
+    buffers: [],
+  });
 
   // Create the native callback
   const visitorPtr = createVisitorCallback();
@@ -149,11 +155,13 @@ export function visitChildren(
     closeCurrentCallback();
 
     // Get collected cursor buffers and clean up (if collect is true)
-    if (shouldCollect) {
+    if (shouldCollectValue) {
       buffers = getCollectedCursorBuffers();
     }
     clearCollectedCursors();
-    setVisitor(null);
+
+    // Pop the visit context
+    popVisitContext();
   }
 
   // Return the raw buffers - these can be passed to FFI functions like getCursorType
@@ -218,7 +226,6 @@ function createVisitorCallback(): Deno.PointerValue {
         cursorData1,
         cursorData2,
       );
-      const cursorBuffer = nativeCursor.getBuffer();
 
       // Get the CXCursor object for the visitor callback
       const cursor = nativeCursor.toCXCursor();
@@ -250,8 +257,11 @@ function createVisitorCallback(): Deno.PointerValue {
       if (visitor) {
         const result = visitor(cursor, parent);
 
-        // Collect the native buffer for later retrieval (can be passed to FFI)
-        addCollectedCursorBuffer(cursorBuffer);
+        // Only collect the native buffer if collection is enabled
+        if (shouldCollect()) {
+          const cursorBuffer = nativeCursor.getBuffer();
+          addCollectedCursorBuffer(cursorBuffer);
+        }
 
         // Return the visitor result directly - CXChildVisitResult values
         // (Break=0, Continue=1, Recurse=2) are passed through to native code.

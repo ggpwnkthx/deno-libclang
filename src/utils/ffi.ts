@@ -145,11 +145,13 @@ export function ptrValueToBigint(
   if (typeof ptr === "bigint") {
     return ptr;
   }
-  // Deno.UnsafePointer has a .value property that returns bigint
-  if (typeof ptr === "object" && "value" in ptr) {
-    return (ptr as { value: bigint }).value as bigint ?? 0n;
+  // Deno.UnsafePointer.value is a method, not a property
+  // Call it to get the bigint value
+  try {
+    return Deno.UnsafePointer.value(ptr);
+  } catch {
+    return 0n;
   }
-  return 0n;
 }
 
 /**

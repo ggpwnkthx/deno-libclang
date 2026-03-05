@@ -2,49 +2,86 @@
  * Global state for AST traversal callbacks
  *
  * Manages state for the clang_visitChildren callback system
+ * Uses a stack-based approach for re-entrant safety (nested visitChildren calls)
  */
 
-import { POINTER_SIZE, readPtr } from "../utils/ffi.ts";
+import { bigintToPtrValue, POINTER_SIZE, readPtr } from "../utils/ffi.ts";
 import type { CursorVisitor, CXCursor } from "./types.ts";
 
-// Global state to store visitor function and collected cursor buffers
-let currentVisitor: CursorVisitor | null = null;
-let collectedCursorBuffers: Uint8Array[] = [];
-
 /**
- * Set the current visitor function
+ * Visit context - stores state for a single visitChildren call
  */
-export function setVisitor(visitor: CursorVisitor | null): void {
-  currentVisitor = visitor;
-  collectedCursorBuffers = [];
+interface VisitContext {
+  /** The visitor function */
+  visitor: CursorVisitor | null;
+  /** Whether to collect cursor buffers */
+  collect: boolean;
+  /** Collected cursor buffers */
+  buffers: Uint8Array[];
 }
 
 /**
- * Get the current visitor function
+ * Stack of visit contexts for re-entrant safety
+ */
+const visitContextStack: VisitContext[] = [];
+
+/**
+ * Push a new visit context onto the stack
+ */
+export function pushVisitContext(context: VisitContext): void {
+  visitContextStack.push(context);
+}
+
+/**
+ * Pop the current visit context from the stack
+ */
+export function popVisitContext(): VisitContext | undefined {
+  return visitContextStack.pop();
+}
+
+/**
+ * Get the current visitor function from the top of the stack
  */
 export function getVisitor(): CursorVisitor | null {
-  return currentVisitor;
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  return ctx?.visitor ?? null;
 }
 
 /**
- * Add a cursor buffer to the collected results
+ * Add a cursor buffer to the current context's collected results
+ * Only adds if collection is enabled
  */
 export function addCollectedCursorBuffer(buffer: Uint8Array): void {
-  collectedCursorBuffers.push(buffer);
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  if (ctx?.collect) {
+    ctx.buffers.push(buffer);
+  }
 }
 
 /**
- * Get all collected cursor buffers
+ * Get all collected cursor buffers from the current context
  */
 export function getCollectedCursorBuffers(): Uint8Array[] {
-  return collectedCursorBuffers;
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  return ctx?.buffers ?? [];
 }
 
 /**
- * Clear the collected cursors
+ * Clear collected cursors in the current context
  */
 export function clearCollectedCursors(): void {
-  collectedCursorBuffers = [];
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  if (ctx) {
+    ctx.buffers = [];
+  }
+}
+
+/**
+ * Get whether collection is enabled in the current context
+ */
+export function shouldCollect(): boolean {
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  return ctx?.collect ?? true;
 }
 
 /**
@@ -60,9 +97,9 @@ export function parseCursorBuffer(buffer: Uint8Array): CXCursor {
     kind: view.getUint32(0, true),
     xdata: view.getInt32(4, true),
     data: [
-      readPtr(view, 8) as unknown as Deno.PointerValue,
-      readPtr(view, 8 + POINTER_SIZE) as unknown as Deno.PointerValue,
-      readPtr(view, 8 + POINTER_SIZE * 2) as unknown as Deno.PointerValue,
+      bigintToPtrValue(readPtr(view, 8)),
+      bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE)),
+      bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE * 2)),
     ],
   };
 }

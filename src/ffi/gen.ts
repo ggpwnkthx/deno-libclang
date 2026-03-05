@@ -174,9 +174,7 @@ function lowerTypeToFFI(
     case CXTypeKind.SChar: {
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint8_t as SChar)
-      const typeSpelling = type instanceof Uint8Array
-        ? getTypeSpelling(type).toLowerCase()
-        : "";
+      const typeSpelling = getTypeSpelling(type).toLowerCase();
       if (/\buint8(_t)?\b/.test(typeSpelling)) return "u8";
       return "i8";
     }
@@ -185,9 +183,7 @@ function lowerTypeToFFI(
     case CXTypeKind.Short: {
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint16_t as Short)
-      const typeSpelling = type instanceof Uint8Array
-        ? getTypeSpelling(type).toLowerCase()
-        : "";
+      const typeSpelling = getTypeSpelling(type).toLowerCase();
       if (/\buint16(_t)?\b/.test(typeSpelling)) return "u16";
       return "i16";
     }
@@ -196,9 +192,7 @@ function lowerTypeToFFI(
     case CXTypeKind.Int: {
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint32_t as Int)
-      const typeSpelling = type instanceof Uint8Array
-        ? getTypeSpelling(type).toLowerCase()
-        : "";
+      const typeSpelling = getTypeSpelling(type).toLowerCase();
       if (/\buint32(_t)?\b/.test(typeSpelling)) return "u32";
       return "i32";
     }
