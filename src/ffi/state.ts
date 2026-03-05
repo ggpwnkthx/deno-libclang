@@ -4,7 +4,7 @@
  * Manages state for the clang_visitChildren callback system
  */
 
-import { readPtr, POINTER_SIZE } from "../utils/ffi.ts";
+import { POINTER_SIZE, readPtr } from "../utils/ffi.ts";
 import type { CursorVisitor, CXCursor } from "./types.ts";
 
 // Global state to store visitor function and collected cursor buffers

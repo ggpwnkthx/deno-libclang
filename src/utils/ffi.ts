@@ -21,8 +21,21 @@ export const ULONG_SIZE = Deno.build.os === "windows"
 // CXCursor size: kind:u32 + xdata:i32 + 3 pointers
 export const CX_CURSOR_SIZE = 8 + POINTER_SIZE * 3;
 
+// CXCursor field offsets
+export const CX_CURSOR_KIND_OFFSET = 0;
+export const CX_CURSOR_XDATA_OFFSET = 4;
+export const CX_CURSOR_DATA0_OFFSET = 8;
+export const CX_CURSOR_DATA1_OFFSET = 8 + POINTER_SIZE;
+export const CX_CURSOR_DATA2_OFFSET = 8 + POINTER_SIZE * 2;
+
 // CXType size: kind:u32 + reserved:u32 + 2 pointers
 export const CX_TYPE_SIZE = 8 + POINTER_SIZE * 2;
+
+// CXType field offsets
+export const CX_TYPE_KIND_OFFSET = 0;
+export const CX_TYPE_RESERVED_OFFSET = 4;
+export const CX_TYPE_DATA0_OFFSET = 8;
+export const CX_TYPE_DATA1_OFFSET = 8 + POINTER_SIZE;
 
 // CXSourceLocation: 2 pointers + u32
 export const CX_SOURCE_LOCATION_SIZE = POINTER_SIZE * 2 + 4;

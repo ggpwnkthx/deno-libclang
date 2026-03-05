@@ -12,7 +12,7 @@ import type {
   SourceLocation,
   SourceRange,
 } from "../ffi/types.ts";
-import { getSymbols } from "./library.ts";
+import { getSymbols, getSymbolsCached } from "./library.ts";
 import { getFileName } from "./file.ts";
 import { bigintToPtrValue, POINTER_SIZE } from "../utils/ffi.ts";
 
@@ -25,7 +25,7 @@ import { bigintToPtrValue, POINTER_SIZE } from "../utils/ffi.ts";
  * @returns The JavaScript string
  */
 export function cxStringToString(cxString: CXString): string {
-  const sym = getSymbols();
+  const sym = getSymbolsCached();
   const cStr = sym.clang_getCString(cxString);
   const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
   sym.clang_disposeString(cxString);

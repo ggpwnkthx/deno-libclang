@@ -30,7 +30,6 @@ export type CXCursor = {
 };
 
 /** Represents a type in the Clang AST */
-// LLVM 20 changed CXType - try with 3 fields
 export type CXType = {
   /** The type kind (CXTypeKind) */
   kind: number;
@@ -98,6 +97,19 @@ export interface CXUnsavedFile {
 
 // ============================================================================
 // Cursor Kinds (enum CXCursorKind)
+//
+// NOTE: Some enum values in libclang v20 intentionally share the same numeric
+// value (aliases). These are NOT bugs - they are how libclang defines them.
+// When checking cursor kinds, you may need to check both values:
+// - 18: ObjCClassMethodDecl / ObjCImplementationDecl
+// - 47: CXXOperatorCallExpr / CXXAccessSpecifier
+// - 48: CXXMemberCallExpr / MemberRef
+//
+// Also note: Some enum values were removed or renumbered in LLVM 20:
+// - ArgDecl (old 11) - removed, use ParmDecl
+// - ThisExpr (old 64) - removed, use CXXThisExpr
+// - ExpressionStmt - removed, use CompoundStmt
+// - CXXTryOrCatchStmt - removed, use CXXTryStmt/CXXCatchStmt
 // ============================================================================
 
 /**
@@ -124,6 +136,7 @@ export enum CXCursorKind {
   ObjCPropertyDecl = 15,
   ObjCIvarDecl = 16,
   ObjCInstanceMethodDecl = 17,
+  // Note: 18 is shared by ObjCClassMethodDecl AND ObjCImplementationDecl (libclang alias)
   ObjCClassMethodDecl = 18,
   ObjCImplementationDecl = 18,
   ObjCCategoryImplDecl = 19,
@@ -135,7 +148,9 @@ export enum CXCursorKind {
   CXXConstructor = 34,
   CXXDestructor = 35,
   CXXMethod = 36,
+  // Note: 47 is shared by CXXOperatorCallExpr AND CXXAccessSpecifier (libclang alias)
   CXXOperatorCallExpr = 47,
+  // Note: 48 is shared by CXXMemberCallExpr AND MemberRef (libclang alias)
   CXXMemberCallExpr = 48,
   // Note: CXXCallExpr alias handled below
   CXXNewExpr = 134,
@@ -151,6 +166,7 @@ export enum CXCursorKind {
   CXXTypeRefExpr = 200,
   TemplateRef = 41,
   NamespaceAliasRef = 42,
+  // Note: 48 is shared with CXXMemberCallExpr (see above)
   MemberRef = 48,
   // MemberRefExpr is at 126
   LabelRef = 43,
@@ -217,6 +233,7 @@ export enum CXCursorKind {
   TypoExpr = 33,
   CXXBaseSpecifier = 40,
   TemplateTypeParameter = 44,
+  // Note: 47 is shared with CXXOperatorCallExpr (see above)
   CXXAccessSpecifier = 47,
   OverloadDecl = 63,
   // Misc

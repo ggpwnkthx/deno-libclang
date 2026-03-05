@@ -17,6 +17,12 @@ let symbols: LibclangSymbols | null = null;
 const MIN_VERSION = 20;
 
 /**
+ * Maximum supported libclang major version
+ * Used to detect when a newer (potentially incompatible) version is being used
+ */
+const MAX_VERSION = 20;
+
+/**
  * Check if libclang is currently loaded
  *
  * @returns true if libclang is loaded, false otherwise
@@ -66,6 +72,14 @@ function checkVersion(): void {
     throw new Error(
       `libclang v${majorVersion} detected, but this library requires v${MIN_VERSION}+. ` +
         `Please install libclang v${MIN_VERSION} or higher.`,
+    );
+  }
+
+  // Warn if version is newer than tested
+  if (majorVersion > MAX_VERSION) {
+    console.warn(
+      `Warning: libclang v${majorVersion} detected, but this library has only been tested up to v${MAX_VERSION}. ` +
+        `Some features may not work correctly.`,
     );
   }
 }
@@ -128,9 +142,17 @@ export function unload(): boolean {
     libclang.close();
     libclang = null;
     symbols = null;
+    cachedSymbols = null;
   }
   return true;
 }
+
+/**
+ * Cached symbols reference for hot paths
+ * This avoids repeated null checks in functions that are called thousands of times
+ * (e.g., during AST traversal via visitChildren)
+ */
+let cachedSymbols: LibclangSymbols | null = null;
 
 /**
  * Get the loaded libclang symbols
@@ -143,6 +165,24 @@ export function getSymbols(): LibclangSymbols {
     throw new Error("libclang not loaded. Call load() first.");
   }
   return symbols;
+}
+
+/**
+ * Get symbols with caching for hot paths
+ *
+ * This function caches the symbols reference after the first call,
+ * eliminating null checks in performance-critical code paths.
+ * Use this in functions that are called frequently (e.g., visitChildren callbacks).
+ *
+ * @returns The cached libclang symbols
+ * @throws Error if libclang has not been loaded yet
+ */
+export function getSymbolsCached(): LibclangSymbols {
+  if (cachedSymbols) {
+    return cachedSymbols;
+  }
+  cachedSymbols = getSymbols();
+  return cachedSymbols;
 }
 
 /**
