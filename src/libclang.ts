@@ -7,7 +7,7 @@
 // Re-export from submodules for backward compatibility
 
 // Library management
-export { getVersion, load, unload } from "./libclang/library.ts";
+export { getVersion, isLoaded, load, unload } from "./libclang/library.ts";
 
 // Index functions
 export { createIndex, disposeIndex } from "./libclang/index.ts";

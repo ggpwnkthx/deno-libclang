@@ -7,7 +7,6 @@ import {
   CXChildVisitResult,
   CXCursorKind,
   fileIsNull,
-  getCursorKind,
   getCursorLocation,
   getCursorSpelling,
   getFile,
@@ -16,7 +15,7 @@ import {
   visitChildren,
 } from "../mod.ts";
 import type { CXFile } from "../src/ffi/types.ts";
-import { findCursorByKind, parseC } from "./test_utils.ts";
+import { parseC } from "./test_utils.ts";
 import { CX_CURSOR_SIZE } from "../src/utils/ffi.ts";
 
 Deno.test({

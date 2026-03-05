@@ -7,11 +7,8 @@ import {
   CXCursorKind,
   disposeTranslationUnit,
   getCursorLocation,
-  getFile,
-  getNumDiagnostics,
   getTranslationUnitCursor,
   parseTranslationUnit,
-  reparseTranslationUnit,
 } from "../mod.ts";
 import { findCursorByKind, parseC } from "./test_utils.ts";
 

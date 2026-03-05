@@ -26,7 +26,7 @@ const MAX_VERSION = 21;
 class LibclangLibrary {
   private libclang: unknown = null;
   private symbols: LibclangSymbols | null = null;
-  private cachedSymbols: LibclangLibrary | null = null;
+  private cachedSymbols: LibclangSymbols | null = null;
 
   /**
    * Check if libclang is currently loaded
@@ -183,7 +183,7 @@ class LibclangLibrary {
       return this.cachedSymbols as unknown as LibclangSymbols;
     }
     const symbols = this.getSymbols();
-    this.cachedSymbols = symbols as unknown as LibclangLibrary;
+    this.cachedSymbols = symbols;
     return symbols;
   }
 
