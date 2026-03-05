@@ -14,7 +14,7 @@ import {
   getTypeKind,
   getTypeKindSpelling,
   getTypeSpelling,
-  getValueType,
+
   load,
   unload,
 } from "../mod.ts";
@@ -147,34 +147,6 @@ Deno.test({
   },
 });
 
-Deno.test({
-  name: "type - getValueType with elaborated type",
-  async fn() {
-    const code = `
-      typedef int my_int;
-      my_int x = 5;
-    `;
-    const { tuCursor, cleanup } = await parseC(code);
-    try {
-      const varDecl = findCursorByKind(tuCursor, CXCursorKind.VarDecl);
-      assertExists(varDecl, "Expected to find VarDecl cursor");
-
-      const type = getCursorType(varDecl);
-      const typeKind = getTypeKind(type);
-      const valueType = getValueType(type);
-
-      assertExists(valueType);
-      assertEquals(typeof typeKind, "number");
-      assertEquals(typeof valueType.kind, "number");
-
-      const valueTypeKind = getTypeKind(valueType);
-      assertEquals(typeof valueTypeKind, "number");
-      assertEquals(valueTypeKind >= 0, true);
-    } finally {
-      await cleanup();
-    }
-  },
-});
 
 Deno.test({
   name: "type - getNumArgTypes",

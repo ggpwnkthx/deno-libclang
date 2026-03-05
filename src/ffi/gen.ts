@@ -22,7 +22,7 @@ import {
   getTypeKindSpelling,
   getTypeSize,
   getTypeSpelling,
-  getValueType,
+  getAtomicValueType,
   visitChildren,
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
@@ -280,7 +280,7 @@ function lowerTypeToFFI(
     case CXTypeKind.Auto: {
       // Auto types - try to resolve using getValueType or getTypeSpelling
       try {
-        const valueType = getValueType(type);
+        const valueType = getAtomicValueType(type);
         return lowerTypeToFFI(
           valueType,
           options,
@@ -301,7 +301,7 @@ function lowerTypeToFFI(
     case CXTypeKind.Typedef: {
       // For typedefs, try to resolve to the underlying type using getValueType
       try {
-        const valueType = getValueType(type);
+        const valueType = getAtomicValueType(type);
         return lowerTypeToFFI(
           valueType,
           options,

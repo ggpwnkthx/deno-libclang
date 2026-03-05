@@ -7,7 +7,8 @@ C/C++/Objective-C source code.
 
 - [Deno](https://deno.land/) runtime
 - libclang v20+ installed on your system:
-  - Linux: `bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"` or install LLVM 20
+  - Linux: `bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"` or install LLVM
+    20
   - macOS: `brew install llvm@20`
   - Windows: Install LLVM 20
 
@@ -44,10 +45,16 @@ load();
 
 // Create an index
 const index = createIndex();
-const translationUnit = parseTranslationUnit(index, "path/to/source.c");
+const result = parseTranslationUnit(index, "path/to/source.c");
+
+if (!result.translationUnit) {
+  console.error("Parse failed:", result.error);
+  disposeIndex(index);
+  throw new Error(result.error);
+}
 
 // Visit AST nodes
-visitChildren(translationUnit, (cursor, _parent) => {
+visitChildren(result.translationUnit, (cursor, _parent) => {
   console.log(
     `${getCursorKindSpelling(getCursorKind(cursor))}: ${
       getCursorSpelling(cursor)
@@ -59,7 +66,7 @@ visitChildren(translationUnit, (cursor, _parent) => {
 });
 
 // Clean up
-disposeTranslationUnit(translationUnit);
+disposeTranslationUnit(result.translationUnit);
 disposeIndex(index);
 ```
 

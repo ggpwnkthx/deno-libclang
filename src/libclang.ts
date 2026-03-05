@@ -54,7 +54,6 @@ export {
   getTypeKindSpelling,
   getTypeSize,
   getTypeSpelling,
-  getValueType,
   isCharPointerType,
   isVoidPointerType,
   type NativeType,

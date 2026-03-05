@@ -10,7 +10,16 @@ import {
 } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { cxStringToString, toNativeCursor, toNativeType } from "./helpers.ts";
-import { CX_TYPE_SIZE, POINTER_SIZE, readPtr, writePtr } from "../utils/ffi.ts";
+import {
+  CX_TYPE_DATA0_OFFSET,
+  CX_TYPE_DATA1_OFFSET,
+  CX_TYPE_KIND_OFFSET,
+  CX_TYPE_RESERVED_OFFSET,
+  CX_TYPE_SIZE,
+
+  readPtr,
+  writePtr,
+} from "../utils/ffi.ts";
 
 /**
  * Parse CXType result from FFI call
@@ -40,11 +49,11 @@ function parseCXTypeResult(result: Uint8Array | CXType): CXType {
  */
 export function cxTypeToBuffer(type: CXType): Uint8Array {
   const view = new DataView(new ArrayBuffer(CX_TYPE_SIZE));
-  view.setUint32(0, type.kind, true);
-  view.setUint32(4, type.reserved, true);
+  view.setUint32(CX_TYPE_KIND_OFFSET, type.kind, true);
+  view.setUint32(CX_TYPE_RESERVED_OFFSET, type.reserved, true);
   // Treat data0 and data1 as opaque integral slots (bigint), not pointer objects
-  writePtr(view, 8, type.data0 as unknown as bigint);
-  writePtr(view, 8 + POINTER_SIZE, type.data1 as unknown as bigint);
+  writePtr(view, CX_TYPE_DATA0_OFFSET, type.data0 as unknown as bigint);
+  writePtr(view, CX_TYPE_DATA1_OFFSET, type.data1 as unknown as bigint);
   return new Uint8Array(view.buffer);
 }
 
@@ -63,10 +72,10 @@ export function parseCXTypeFromBuffer(buffer: Uint8Array): CXType {
     buffer.byteLength,
   );
   // CXType: { kind: u32, reserved: u32, data0: pointer, data1: pointer }
-  const kind = view.getUint32(0, true);
-  const reserved = view.getUint32(4, true);
-  const data0 = readPtr(view, 8);
-  const data1 = readPtr(view, 8 + POINTER_SIZE);
+  const kind = view.getUint32(CX_TYPE_KIND_OFFSET, true);
+  const reserved = view.getUint32(CX_TYPE_RESERVED_OFFSET, true);
+  const data0 = readPtr(view, CX_TYPE_DATA0_OFFSET);
+  const data1 = readPtr(view, CX_TYPE_DATA1_OFFSET);
 
   return {
     kind,
@@ -148,19 +157,6 @@ export function getNamedType(type: CXType | Uint8Array): CXType {
   return parseCXTypeResult(result);
 }
 
-/**
- * Get the value type from an elaborated type (legacy alias)
- *
- * @deprecated Use getAtomicValueType() for atomic types or getNamedType() for
- *             elaborated types. This function now delegates to getAtomicValueType.
- * @param type - CXType that may be elaborated
- * @returns CXType of the value type
- */
-export function getValueType(type: CXType | Uint8Array): CXType {
-  // getValueType was incorrectly documented as unwrapping elaborated types
-  // but actually only works for atomic types. Delegate to atomic version.
-  return getAtomicValueType(type);
-}
 
 /**
  * Get the kind of a type

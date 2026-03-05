@@ -153,8 +153,12 @@ export function visitChildren(
   return buffers;
 }
 
-// Store callback globally to prevent garbage collection during visitChildren
-let currentCallback: unknown = null;
+/**
+ * Keeps the callback alive during native visitation.
+ * Without this, the UnsafeCallback could be garbage collected
+ * while clang_visitChildren is still executing.
+ */
+let currentCallback: Deno.UnsafeCallback | null = null;
 
 function createVisitorCallback(): Deno.PointerValue {
   // Close previous callback if exists
@@ -246,7 +250,7 @@ function createVisitorCallback(): Deno.PointerValue {
   );
 
   // Store callback globally for cleanup
-  currentCallback = callback;
+  currentCallback = callback as Deno.UnsafeCallback;
 
   // Return just the pointer
   return callback.pointer;

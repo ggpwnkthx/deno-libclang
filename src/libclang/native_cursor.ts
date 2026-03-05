@@ -11,6 +11,11 @@
 import type { CXCursor, CXCursorKind } from "../ffi/types.ts";
 import {
   bigintToPtrValue,
+  CX_CURSOR_KIND_OFFSET,
+  CX_CURSOR_XDATA_OFFSET,
+  CX_CURSOR_DATA0_OFFSET,
+  CX_CURSOR_DATA1_OFFSET,
+  CX_CURSOR_DATA2_OFFSET,
   CX_CURSOR_SIZE,
   POINTER_SIZE,
   readPtr,
@@ -75,11 +80,11 @@ export class NativeCXCursor {
       this.buffer.byteOffset,
       CX_CURSOR_SIZE,
     );
-    view.setUint32(0, kind, true); // kind: u32
-    view.setInt32(4, xdata, true); // xdata: i32
-    writePtr(view, 8, data0); // data[0]: pointer at offset 8
-    writePtr(view, 8 + POINTER_SIZE, data1); // data[1]: pointer at offset 8+POINTER_SIZE
-    writePtr(view, 8 + POINTER_SIZE * 2, data2); // data[2]: pointer at offset 8+POINTER_SIZE*2
+    view.setUint32(CX_CURSOR_KIND_OFFSET, kind, true); // kind: u32
+    view.setInt32(CX_CURSOR_XDATA_OFFSET, xdata, true); // xdata: i32
+    writePtr(view, CX_CURSOR_DATA0_OFFSET, data0); // data[0]: pointer at offset 8
+    writePtr(view, CX_CURSOR_DATA1_OFFSET, data1); // data[1]: pointer at offset 8+POINTER_SIZE
+    writePtr(view, CX_CURSOR_DATA2_OFFSET, data2); // data[2]: pointer at offset 8+POINTER_SIZE*2
   }
 
   /**
@@ -97,7 +102,7 @@ export class NativeCXCursor {
    * @returns The cursor kind value
    */
   getKind(): number {
-    return new DataView(this.buffer.buffer).getUint32(0, true);
+    return new DataView(this.buffer.buffer).getUint32(CX_CURSOR_KIND_OFFSET, true);
   }
 
   /**
@@ -106,7 +111,7 @@ export class NativeCXCursor {
    * @returns The xdata integer value
    */
   getXdata(): number {
-    return new DataView(this.buffer.buffer).getInt32(4, true);
+    return new DataView(this.buffer.buffer).getInt32(CX_CURSOR_XDATA_OFFSET, true);
   }
 
   /**
@@ -130,12 +135,12 @@ export class NativeCXCursor {
   toCXCursor(): CXCursor {
     const view = new DataView(this.buffer.buffer);
     return {
-      kind: view.getUint32(0, true),
-      xdata: view.getInt32(4, true),
+      kind: view.getUint32(CX_CURSOR_KIND_OFFSET, true),
+      xdata: view.getInt32(CX_CURSOR_XDATA_OFFSET, true),
       data: [
-        bigintToPtrValue(readPtr(view, 8)),
-        bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE)),
-        bigintToPtrValue(readPtr(view, 8 + POINTER_SIZE * 2)),
+        bigintToPtrValue(readPtr(view, CX_CURSOR_DATA0_OFFSET)),
+        bigintToPtrValue(readPtr(view, CX_CURSOR_DATA1_OFFSET)),
+        bigintToPtrValue(readPtr(view, CX_CURSOR_DATA2_OFFSET)),
       ],
     };
   }
