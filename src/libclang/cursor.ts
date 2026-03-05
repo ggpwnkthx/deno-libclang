@@ -134,14 +134,8 @@ export function visitChildren(
       null as unknown as Deno.PointerValue,
     );
   } finally {
-    // Clean up the callback to prevent memory leak
-    if (
-      currentCallback && typeof currentCallback === "object" &&
-      "close" in currentCallback
-    ) {
-      (currentCallback as { close: () => void }).close();
-      currentCallback = null;
-    }
+    // Clean up the callback to prevent memory leak (uses shared closeCurrentCallback)
+    closeCurrentCallback();
 
     // Get collected cursor buffers and clean up
     buffers = getCollectedCursorBuffers();
@@ -160,8 +154,10 @@ export function visitChildren(
  */
 let currentCallback: Deno.UnsafeCallback | null = null;
 
-function createVisitorCallback(): Deno.PointerValue {
-  // Close previous callback if exists
+/**
+ * Close the current callback if it exists
+ */
+function closeCurrentCallback(): void {
   if (
     currentCallback && typeof currentCallback === "object" &&
     "close" in currentCallback
@@ -169,6 +165,11 @@ function createVisitorCallback(): Deno.PointerValue {
     (currentCallback as { close: () => void }).close();
     currentCallback = null;
   }
+}
+
+function createVisitorCallback(): Deno.PointerValue {
+  // Close any existing callback before creating a new one
+  closeCurrentCallback();
 
   const callback = new Deno.UnsafeCallback(
     {

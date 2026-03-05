@@ -16,7 +16,6 @@ import {
   CX_TYPE_KIND_OFFSET,
   CX_TYPE_RESERVED_OFFSET,
   CX_TYPE_SIZE,
-
   readPtr,
   writePtr,
 } from "../utils/ffi.ts";
@@ -156,7 +155,6 @@ export function getNamedType(type: CXType | Uint8Array): CXType {
   const result = sym.clang_Type_getNamedType(typeArg as unknown as CXType);
   return parseCXTypeResult(result);
 }
-
 
 /**
  * Get the kind of a type
@@ -400,40 +398,25 @@ export function typeKindToFFI(
       return "u8";
     case CXTypeKind.Char_S:
       // On Windows, char is unsigned (u8). On Unix, it's signed (i8).
-      // Document platform dependence.
       return Deno.build.os === "windows" ? "u8" : "i8";
     case CXTypeKind.Char_U:
       return "u8"; // unsigned char always u8
     case CXTypeKind.SChar:
-      // Check spelling for unsigned variants (libclang sometimes misreports uint8_t as SChar)
-      if (/\buint8(_t)?\b/.test(typeSpelling.toLowerCase())) return "u8";
-      return "i8";
+      return inferSignedFromSpelling(typeSpelling, "i8", "u8");
     case CXTypeKind.UChar:
       return "u8";
     case CXTypeKind.Short:
-      // Check spelling for unsigned variants (libclang sometimes misreports uint16_t as Short)
-      if (/\buint16(_t)?\b/.test(typeSpelling.toLowerCase())) return "u16";
-      return "i16";
+      return inferSignedFromSpelling(typeSpelling, "i16", "u16");
     case CXTypeKind.UShort:
       return "u16";
     case CXTypeKind.Int:
-      // Check spelling for unsigned variants (libclang sometimes misreports uint32_t as Int)
-      if (/\buint32(_t)?\b/.test(typeSpelling.toLowerCase())) return "u32";
-      return "i32";
+      return inferSignedFromSpelling(typeSpelling, "i32", "u32");
     case CXTypeKind.UInt:
       return "u32";
     case CXTypeKind.Long:
-      // Windows LLP64: long is always 32-bit even on x86_64
-      if (Deno.build.os === "windows") return "i32";
-      return Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64"
-        ? "i64"
-        : "i32";
+      return mapLongType(true);
     case CXTypeKind.ULong:
-      // Windows LLP64: unsigned long is always 32-bit even on x86_64
-      if (Deno.build.os === "windows") return "u32";
-      return Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64"
-        ? "u64"
-        : "u32";
+      return mapLongType(false);
     case CXTypeKind.LongLong:
       return "i64";
     case CXTypeKind.ULongLong:
@@ -448,77 +431,89 @@ export function typeKindToFFI(
       return "i32";
     case CXTypeKind.Record:
       return "pointer";
-    case CXTypeKind.Elaborated: {
-      // Elaborated types - need to resolve to underlying type
-      // For now, try to infer from spelling
-      const spelling = typeSpelling.toLowerCase();
-      // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
-      // Use word boundary matching to avoid matching "uint16_t" as "int16"
-      if (/\buint8(_t)?\b/.test(spelling)) {
-        return "u8";
-      }
-      if (/\bint8(_t)?\b/.test(spelling)) return "i8";
-      if (/\buint16(_t)?\b/.test(spelling)) {
-        return "u16";
-      }
-      if (/\bint16(_t)?\b/.test(spelling)) {
-        return "i16";
-      }
-      // Check unsigned before signed to avoid substring match issues
-      if (/\buint64(_t)?\b/.test(spelling)) {
-        return "u64";
-      }
-      if (/\bint64(_t)?\b/.test(spelling)) {
-        return "i64";
-      }
-      if (/\buint32(_t)?\b/.test(spelling)) {
-        return "u32";
-      }
-      if (/\bint32(_t)?\b/.test(spelling)) {
-        return "i32";
-      }
-      if (spelling.includes("float")) return "f32";
-      if (spelling.includes("double")) return "f64";
-      if (spelling.includes("bool")) return "u8";
-      if (spelling.includes("char") && spelling.includes("*")) return "pointer";
-      if (spelling.includes("void") && spelling.includes("*")) return "pointer";
-      // Check for struct/union types
-      if (spelling.startsWith("struct ") || spelling.startsWith("union ")) {
-        return "pointer";
-      }
-      return null;
-    }
-    default: {
-      // Try to infer from spelling - use word boundary matching to avoid substring bugs
-      const spelling = typeSpelling.toLowerCase();
-      // Check unsigned before signed to avoid substring match issues (e.g., "uint8_t" contains "int8")
-      if (/\buint8(_t)?\b/.test(spelling)) {
-        return "u8";
-      }
-      if (/\bint8(_t)?\b/.test(spelling)) return "i8";
-      if (/\buint16(_t)?\b/.test(spelling)) {
-        return "u16";
-      }
-      if (/\bint16(_t)?\b/.test(spelling)) {
-        return "i16";
-      }
-      // Check unsigned before signed to avoid substring match issues
-      if (/\buint64(_t)?\b/.test(spelling)) {
-        return "u64";
-      }
-      if (/\bint64(_t)?\b/.test(spelling)) {
-        return "i64";
-      }
-      if (/\buint32(_t)?\b/.test(spelling)) {
-        return "u32";
-      }
-      if (/\bint32(_t)?\b/.test(spelling)) {
-        return "i32";
-      }
-      if (spelling === "float") return "f32";
-      if (spelling === "double") return "f64";
-      if (spelling === "bool") return "u8";
-      return null;
-    }
+    case CXTypeKind.Elaborated:
+      return inferFromElaboratedSpelling(typeSpelling);
+    default:
+      return inferFromSpelling(typeSpelling);
   }
+}
+
+/**
+ * Infer signed vs unsigned based on type spelling
+ */
+function inferSignedFromSpelling(
+  spelling: string,
+  signed: string,
+  unsigned: string,
+): string {
+  const lower = spelling.toLowerCase();
+  const baseType = signed.slice(1); // "i8" -> "8", "i16" -> "16", etc.
+  const unsignedPattern = new RegExp(`^u?int${baseType}(_t)?$`);
+  if (unsignedPattern.test(lower)) {
+    return unsigned;
+  }
+  return signed;
+}
+
+/**
+ * Map long types accounting for platform differences
+ * Windows LLP64: long is always 32-bit even on x86_64
+ */
+function mapLongType(isSigned: boolean): string {
+  if (Deno.build.os === "windows") {
+    return isSigned ? "i32" : "u32";
+  }
+  if (Deno.build.arch === "x86_64" || Deno.build.arch === "aarch64") {
+    return isSigned ? "i64" : "u64";
+  }
+  return isSigned ? "i32" : "u32";
+}
+
+/**
+ * Infer FFI type from elaborated type spelling
+ */
+function inferFromElaboratedSpelling(spelling: string): string | null {
+  const lower = spelling.toLowerCase();
+  // Check for fixed-width integers (unsigned before signed to avoid substring issues)
+  if (/\buint8(_t)?\b/.test(lower)) return "u8";
+  if (/\bint8(_t)?\b/.test(lower)) return "i8";
+  if (/\buint16(_t)?\b/.test(lower)) return "u16";
+  if (/\bint16(_t)?\b/.test(lower)) return "i16";
+  if (/\buint64(_t)?\b/.test(lower)) return "u64";
+  if (/\bint64(_t)?\b/.test(lower)) return "i64";
+  if (/\buint32(_t)?\b/.test(lower)) return "u32";
+  if (/\bint32(_t)?\b/.test(lower)) return "i32";
+  // Check floating point
+  if (lower.includes("float")) return "f32";
+  if (lower.includes("double")) return "f64";
+  if (lower.includes("bool")) return "u8";
+  // Check pointer types
+  if (lower.includes("char") && lower.includes("*")) return "pointer";
+  if (lower.includes("void") && lower.includes("*")) return "pointer";
+  // Check for struct/union types
+  if (lower.startsWith("struct ") || lower.startsWith("union ")) {
+    return "pointer";
+  }
+  return null;
+}
+
+/**
+ * Infer FFI type from generic spelling (fallback for unknown type kinds)
+ */
+function inferFromSpelling(spelling: string): string | null {
+  const lower = spelling.toLowerCase();
+  // Check for fixed-width integers (unsigned before signed to avoid substring issues)
+  if (/\buint8(_t)?\b/.test(lower)) return "u8";
+  if (/\bint8(_t)?\b/.test(lower)) return "i8";
+  if (/\buint16(_t)?\b/.test(lower)) return "u16";
+  if (/\bint16(_t)?\b/.test(lower)) return "i16";
+  if (/\buint64(_t)?\b/.test(lower)) return "u64";
+  if (/\bint64(_t)?\b/.test(lower)) return "i64";
+  if (/\buint32(_t)?\b/.test(lower)) return "u32";
+  if (/\bint32(_t)?\b/.test(lower)) return "i32";
+  // Check exact matches for basic types
+  if (lower === "float") return "f32";
+  if (lower === "double") return "f64";
+  if (lower === "bool") return "u8";
+  return null;
 }
