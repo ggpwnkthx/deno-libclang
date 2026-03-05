@@ -124,6 +124,35 @@ export function bigintToPtrValue(addr: bigint): Deno.PointerValue | null {
 }
 
 /**
+ * Convert a pointer value (bigint or Deno.PointerValue) to bigint
+ *
+ * Handles:
+ * - null/undefined -> 0n
+ * - bigint -> returns as-is
+ * - Deno.PointerValue objects (e.g., Deno.UnsafePointer) -> extracts .value property
+ *
+ * @param ptr - The pointer value (can be bigint, null, undefined, or Deno.PointerValue)
+ * @returns The pointer value as a bigint, or 0n if null/undefined
+ */
+export function ptrValueToBigint(
+  ptr: bigint | Deno.PointerValue | null | undefined,
+): bigint {
+  // Handle null/undefined
+  if (ptr === null || ptr === undefined) {
+    return 0n;
+  }
+  // If it's already a bigint, return as-is
+  if (typeof ptr === "bigint") {
+    return ptr;
+  }
+  // Deno.UnsafePointer has a .value property that returns bigint
+  if (typeof ptr === "object" && "value" in ptr) {
+    return (ptr as { value: bigint }).value as bigint ?? 0n;
+  }
+  return 0n;
+}
+
+/**
  * Convert a C string pointer to a JavaScript string
  *
  * @param ptr - The pointer to the C string

@@ -14,7 +14,11 @@ import type {
 } from "../ffi/types.ts";
 import { getSymbols, getSymbolsCached } from "./library.ts";
 import { getFileName } from "./file.ts";
-import { bigintToPtrValue, POINTER_SIZE } from "../utils/ffi.ts";
+import {
+  bigintToPtrValue,
+  POINTER_SIZE,
+  ptrValueToBigint,
+} from "../utils/ffi.ts";
 
 /**
  * Convert a CXString to a JavaScript string
@@ -88,7 +92,7 @@ export function parseSourceLocation(
 
     // ptr_data[0] - file pointer
     const ptr0 = location.ptr_data[0];
-    const ptr0Val = typeof ptr0 === "bigint" ? ptr0 : 0n;
+    const ptr0Val = ptrValueToBigint(ptr0);
     if (POINTER_SIZE === 8) {
       view.setBigUint64(0, ptr0Val, true);
     } else {
@@ -97,7 +101,7 @@ export function parseSourceLocation(
 
     // ptr_data[1]
     const ptr1 = location.ptr_data[1];
-    const ptr1Val = typeof ptr1 === "bigint" ? ptr1 : 0n;
+    const ptr1Val = ptrValueToBigint(ptr1);
     if (POINTER_SIZE === 8) {
       view.setBigUint64(POINTER_SIZE, ptr1Val, true);
     } else {
@@ -220,7 +224,7 @@ export function parseSourceRange(
 
     // ptr_data[0] - start location
     const ptr0 = range.ptr_data[0];
-    const ptr0Val = typeof ptr0 === "bigint" ? ptr0 : 0n;
+    const ptr0Val = ptrValueToBigint(ptr0);
     if (POINTER_SIZE === 8) {
       view.setBigUint64(0, ptr0Val, true);
     } else {
@@ -229,7 +233,7 @@ export function parseSourceRange(
 
     // ptr_data[1] - end location
     const ptr1 = range.ptr_data[1];
-    const ptr1Val = typeof ptr1 === "bigint" ? ptr1 : 0n;
+    const ptr1Val = ptrValueToBigint(ptr1);
     if (POINTER_SIZE === 8) {
       view.setBigUint64(POINTER_SIZE, ptr1Val, true);
     } else {

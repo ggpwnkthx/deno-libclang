@@ -10,7 +10,8 @@
       "WebFetch(domain:clang.llvm.org)",
       "WebFetch(domain:releases.llvm.org)",
       "mcp__ide__getDiagnostics",
-      "Bash(deno:*)"
+      "Bash(deno:*)",
+      "Bash(sed:*)"
     ]
   },
   "hooks": {

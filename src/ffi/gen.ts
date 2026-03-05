@@ -22,7 +22,7 @@ import {
   getTypeKindSpelling,
   getTypeSize,
   getTypeSpelling,
-  getAtomicValueType,
+
   visitChildren,
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
@@ -278,53 +278,110 @@ function lowerTypeToFFI(
       return { namedStruct: typeSpelling };
     }
     case CXTypeKind.Auto: {
-      // Auto types - try to resolve using getValueType or getTypeSpelling
-      try {
-        const valueType = getAtomicValueType(type);
-        return lowerTypeToFFI(
-          valueType,
-          options,
-          structs,
-          depth + 1,
-          paramName,
-        );
-      } catch {
-        // Fallback to checking type spelling
-        const typeSpelling = getTypeSpelling(type).toLowerCase();
-        // Check if it's a handle type from config
-        if (handleTypes.some((h) => typeSpelling === h.toLowerCase())) {
-          return "u64";
-        }
-        return "pointer";
+      // Auto types - use spelling-based resolution
+      // (getAtomicValueType is for C11 _Atomic, not for auto)
+      const typeSpelling = getTypeSpelling(type).toLowerCase();
+
+      // Check custom type mappings first
+      if (typeMappings && typeSpelling in typeMappings) {
+        return typeMappings[typeSpelling];
       }
+
+      // Check if it's a handle type from config
+      if (handleTypes.some((h) => typeSpelling === h.toLowerCase())) {
+        return "u64";
+      }
+
+      // Try to infer from common fixed-width integer patterns in spelling
+      if (
+        typeSpelling === "int" || typeSpelling === "long" ||
+        typeSpelling === "short"
+      ) {
+        return "i32";
+      }
+      if (typeSpelling.includes("unsigned")) {
+        return "u32";
+      }
+      // Default to pointer for unknown auto types
+      return "pointer";
     }
     case CXTypeKind.Typedef: {
-      // For typedefs, try to resolve to the underlying type using getValueType
-      try {
-        const valueType = getAtomicValueType(type);
-        return lowerTypeToFFI(
-          valueType,
-          options,
-          structs,
-          depth + 1,
-          paramName,
-        );
-      } catch {
-        // Fallback to checking known type names
-        const typeSpelling = getTypeSpelling(type).toLowerCase();
+      // For typedefs, use spelling-based resolution
+      // Note: getAtomicValueType is for C11 _Atomic types, not typedefs
+      // There's no direct FFI to get underlying typedef type without a cursor
+      const typeSpelling = getTypeSpelling(type).toLowerCase();
 
-        // Check custom type mappings first
-        if (typeMappings && typeSpelling in typeMappings) {
-          return typeMappings[typeSpelling];
-        }
+      // Check custom type mappings first
+      if (typeMappings && typeSpelling in typeMappings) {
+        return typeMappings[typeSpelling];
+      }
 
-        // Handle types from config - use u64 to accept bigints directly
-        if (handleTypes.some((h) => typeSpelling === h.toLowerCase())) {
-          return "u64";
-        }
-        // For unknown typedefs, default to pointer
+      // Handle types from config - use u64 to accept bigints directly
+      if (handleTypes.some((h) => typeSpelling === h.toLowerCase())) {
+        return "u64";
+      }
+
+      // Try to infer from common fixed-width integer patterns in spelling
+      // Check unsigned variants first (to avoid substring matching issues)
+      if (
+        typeSpelling.includes("uint8") || typeSpelling === "unsigned char"
+      ) {
+        return "u8";
+      }
+      if (
+        typeSpelling.includes("uint16") || typeSpelling === "unsigned short"
+      ) {
+        return "u16";
+      }
+      if (
+        typeSpelling.includes("uint32") || typeSpelling === "unsigned int" ||
+        typeSpelling === "uint32_t"
+      ) {
+        return "u32";
+      }
+      if (
+        typeSpelling.includes("uint64") || typeSpelling === "unsigned long" ||
+        typeSpelling === "unsigned long long"
+      ) {
+        return "u64";
+      }
+      if (
+        typeSpelling.includes("int8") || typeSpelling === "signed char"
+      ) {
+        return "i8";
+      }
+      if (
+        typeSpelling.includes("int16") || typeSpelling === "short"
+      ) {
+        return "i16";
+      }
+      if (
+        typeSpelling.includes("int32") || typeSpelling === "int" ||
+        typeSpelling === "int32_t"
+      ) {
+        return "i32";
+      }
+      if (
+        typeSpelling.includes("int64") || typeSpelling === "long" ||
+        typeSpelling === "long long"
+      ) {
+        return "i64";
+      }
+      if (typeSpelling.includes("float")) {
+        return "f32";
+      }
+      if (typeSpelling.includes("double")) {
+        return "f64";
+      }
+      if (typeSpelling.includes("char") && typeSpelling.includes("*")) {
         return "pointer";
       }
+      if (typeSpelling.includes("void") && typeSpelling.includes("*")) {
+        return "pointer";
+      }
+
+      // For unknown typedefs, default to pointer
+      return "pointer";
     }
     case CXTypeKind.Elaborated: {
       // Get the underlying named type using clang_Type_getNamedType

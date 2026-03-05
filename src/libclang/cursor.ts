@@ -107,17 +107,28 @@ export function getCursorExtent(cursor: CXCursor | Uint8Array): SourceRange {
 }
 
 /**
+ * Options for visitChildren
+ */
+export interface VisitChildrenOptions {
+  /** If true, collect and return cursor buffers. Default: true for backward compatibility */
+  collect?: boolean;
+}
+
+/**
  * Visit all children of a cursor
  *
  * @param cursor - The parent cursor (CXCursor or Uint8Array buffer from visitChildren)
  * @param visitor - Callback function called for each child cursor
+ * @param options - Optional options to control buffer collection
  * @returns Array of child cursor buffers (Uint8Array) that can be passed to FFI functions
  */
 export function visitChildren(
   cursor: CXCursor | Uint8Array,
   visitor: (cursor: CXCursor, parent: CXCursor) => CXChildVisitResult,
+  options?: VisitChildrenOptions,
 ): Uint8Array[] {
   const sym = getSymbols();
+  const shouldCollect = options?.collect ?? true;
 
   // Set the visitor function in global state
   setVisitor(visitor);
@@ -137,8 +148,10 @@ export function visitChildren(
     // Clean up the callback to prevent memory leak (uses shared closeCurrentCallback)
     closeCurrentCallback();
 
-    // Get collected cursor buffers and clean up
-    buffers = getCollectedCursorBuffers();
+    // Get collected cursor buffers and clean up (if collect is true)
+    if (shouldCollect) {
+      buffers = getCollectedCursorBuffers();
+    }
     clearCollectedCursors();
     setVisitor(null);
   }
