@@ -11,12 +11,12 @@
 import type { CXCursor, CXCursorKind } from "../ffi/types.ts";
 import {
   bigintToPtrValue,
-  CX_CURSOR_KIND_OFFSET,
-  CX_CURSOR_XDATA_OFFSET,
   CX_CURSOR_DATA0_OFFSET,
   CX_CURSOR_DATA1_OFFSET,
   CX_CURSOR_DATA2_OFFSET,
+  CX_CURSOR_KIND_OFFSET,
   CX_CURSOR_SIZE,
+  CX_CURSOR_XDATA_OFFSET,
   POINTER_SIZE,
   readPtr,
   writePtr,
@@ -102,7 +102,10 @@ export class NativeCXCursor {
    * @returns The cursor kind value
    */
   getKind(): number {
-    return new DataView(this.buffer.buffer).getUint32(CX_CURSOR_KIND_OFFSET, true);
+    return new DataView(this.buffer.buffer).getUint32(
+      CX_CURSOR_KIND_OFFSET,
+      true,
+    );
   }
 
   /**
@@ -111,7 +114,10 @@ export class NativeCXCursor {
    * @returns The xdata integer value
    */
   getXdata(): number {
-    return new DataView(this.buffer.buffer).getInt32(CX_CURSOR_XDATA_OFFSET, true);
+    return new DataView(this.buffer.buffer).getInt32(
+      CX_CURSOR_XDATA_OFFSET,
+      true,
+    );
   }
 
   /**

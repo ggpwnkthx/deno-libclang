@@ -22,7 +22,6 @@ import {
   getTypeKindSpelling,
   getTypeSize,
   getTypeSpelling,
-
   visitChildren,
 } from "../libclang.ts";
 import { CXChildVisitResult, CXCursorKind, CXTypeKind } from "./types.ts";
@@ -175,7 +174,11 @@ function lowerTypeToFFI(
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint8_t as SChar)
       const typeSpelling = getTypeSpelling(type).toLowerCase();
-      if (/\buint8(_t)?\b/.test(typeSpelling)) return "u8";
+      if (
+        /\buint8(_t)?\b/.test(typeSpelling) || typeSpelling === "unsigned char"
+      ) {
+        return "u8";
+      }
       return "i8";
     }
     case CXTypeKind.UChar:
@@ -184,7 +187,12 @@ function lowerTypeToFFI(
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint16_t as Short)
       const typeSpelling = getTypeSpelling(type).toLowerCase();
-      if (/\buint16(_t)?\b/.test(typeSpelling)) return "u16";
+      if (
+        /\buint16(_t)?\b/.test(typeSpelling) ||
+        typeSpelling === "unsigned short"
+      ) {
+        return "u16";
+      }
       return "i16";
     }
     case CXTypeKind.UShort:
@@ -193,7 +201,11 @@ function lowerTypeToFFI(
       // Get type spelling to check for unsigned variants
       // (libclang sometimes misreports uint32_t as Int)
       const typeSpelling = getTypeSpelling(type).toLowerCase();
-      if (/\buint32(_t)?\b/.test(typeSpelling)) return "u32";
+      if (
+        /\buint32(_t)?\b/.test(typeSpelling) || typeSpelling === "unsigned int"
+      ) {
+        return "u32";
+      }
       return "i32";
     }
     case CXTypeKind.UInt:

@@ -14,7 +14,6 @@ import {
   getTypeKind,
   getTypeKindSpelling,
   getTypeSpelling,
-
   load,
   unload,
 } from "../mod.ts";
@@ -146,7 +145,6 @@ Deno.test({
     }
   },
 });
-
 
 Deno.test({
   name: "type - getNumArgTypes",
