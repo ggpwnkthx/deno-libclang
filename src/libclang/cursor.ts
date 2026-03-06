@@ -16,6 +16,7 @@ import {
   getVisitor,
   popVisitContext,
   pushVisitContext,
+  setCallback,
   shouldCollect,
 } from "../ffi/state.ts";
 import { getSymbols } from "./library.ts";
@@ -133,26 +134,36 @@ export function visitChildren(
   const shouldCollectValue = options?.collect ?? true;
 
   // Push a new visit context onto the stack for re-entrant safety
+  // Initialize with null callback - will be set after creation
   pushVisitContext({
     visitor,
     collect: shouldCollectValue,
     buffers: [],
+    callback: null,
+    callbackPointer: null,
   });
 
-  // Create the native callback
-  const visitorPtr = createVisitorCallback();
+  // Create the native callback and store it in the context
+  const { callback, pointer } = createVisitorCallback();
+  setCallback(callback, pointer);
 
   let buffers: Uint8Array[] = [];
 
   try {
     sym.clang_visitChildren(
       toNativeCursor(cursor),
-      visitorPtr,
+      pointer,
       null as unknown as Deno.PointerValue,
     );
   } finally {
-    // Clean up the callback to prevent memory leak (uses shared closeCurrentCallback)
-    closeCurrentCallback();
+    // Clean up the callback to prevent memory leak
+    // Only close THIS callback, not any parent callback (re-entrant safety)
+    if (
+      callback && typeof callback === "object" &&
+      "close" in callback
+    ) {
+      callback.close();
+    }
 
     // Get collected cursor buffers and clean up (if collect is true)
     if (shouldCollectValue) {
@@ -169,29 +180,13 @@ export function visitChildren(
 }
 
 /**
- * Keeps the callback alive during native visitation.
- * Without this, the UnsafeCallback could be garbage collected
- * while clang_visitChildren is still executing.
+ * Creates the native callback and returns both the callback and pointer.
+ * The callback is stored in the VisitContext to ensure proper cleanup.
  */
-let currentCallback: Deno.UnsafeCallback | null = null;
-
-/**
- * Close the current callback if it exists
- */
-function closeCurrentCallback(): void {
-  if (
-    currentCallback && typeof currentCallback === "object" &&
-    "close" in currentCallback
-  ) {
-    (currentCallback as { close: () => void }).close();
-    currentCallback = null;
-  }
-}
-
-function createVisitorCallback(): Deno.PointerValue {
-  // Close any existing callback before creating a new one
-  closeCurrentCallback();
-
+function createVisitorCallback(): {
+  callback: Deno.UnsafeCallback;
+  pointer: Deno.PointerValue;
+} {
   const callback = new Deno.UnsafeCallback(
     {
       parameters: [
@@ -273,11 +268,10 @@ function createVisitorCallback(): Deno.PointerValue {
     },
   );
 
-  // Store callback globally for cleanup
-  currentCallback = callback as Deno.UnsafeCallback;
-
-  // Return just the pointer
-  return callback.pointer;
+  return {
+    callback: callback as unknown as Deno.UnsafeCallback,
+    pointer: callback.pointer,
+  };
 }
 
 /**

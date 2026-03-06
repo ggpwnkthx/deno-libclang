@@ -14,6 +14,7 @@ import {
   createIndex,
   disposeIndex,
   disposeTranslationUnit,
+  getCursorSpellingFromBuffer,
   getTranslationUnitCursor,
   load,
   parseTranslationUnit,
@@ -273,25 +274,6 @@ export function findChildByKindAndSpelling(
     const childSpelling = getCursorSpellingFromBuffer(buffer);
     return childSpelling === spelling;
   });
-}
-
-/**
- * Find cursor spelling from a buffer (helper for search functions)
- */
-function getCursorSpellingFromBuffer(buffer: Uint8Array): string {
-  const view = new DataView(buffer.buffer, buffer.byteOffset, CX_CURSOR_SIZE);
-  // The spelling is at offset 8 (kind:u32 + xdata:i32 + first ptr)
-  const ptrOffset = 8;
-  const ptr = view.getBigUint64(ptrOffset, true);
-  if (ptr === 0n) return "";
-
-  try {
-    const deref = Deno.UnsafePointer.create(ptr);
-    if (!deref) return "";
-    return new Deno.UnsafePointerView(deref).getCString();
-  } catch {
-    return "";
-  }
 }
 
 /**

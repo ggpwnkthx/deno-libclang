@@ -2,20 +2,17 @@
  * Type functions
  */
 
-import {
-  type CXCursor,
-  type CXType,
-  CXTypeKind,
-  type NativePointer,
-} from "../ffi/types.ts";
+import { type CXCursor, type CXType, CXTypeKind } from "../ffi/types.ts";
 import { getSymbols } from "./library.ts";
 import { cxStringToString, toNativeCursor, toNativeType } from "./helpers.ts";
 import {
+  bigintToPtrValue,
   CX_TYPE_DATA0_OFFSET,
   CX_TYPE_DATA1_OFFSET,
   CX_TYPE_KIND_OFFSET,
   CX_TYPE_RESERVED_OFFSET,
   CX_TYPE_SIZE,
+  ptrValueToBigint,
   readPtr,
   writePtr,
 } from "../utils/ffi.ts";
@@ -51,8 +48,8 @@ export function cxTypeToBuffer(type: CXType): Uint8Array {
   view.setUint32(CX_TYPE_KIND_OFFSET, type.kind, true);
   view.setUint32(CX_TYPE_RESERVED_OFFSET, type.reserved, true);
   // Treat data0 and data1 as opaque integral slots (bigint), not pointer objects
-  writePtr(view, CX_TYPE_DATA0_OFFSET, type.data0 as unknown as bigint);
-  writePtr(view, CX_TYPE_DATA1_OFFSET, type.data1 as unknown as bigint);
+  writePtr(view, CX_TYPE_DATA0_OFFSET, ptrValueToBigint(type.data0));
+  writePtr(view, CX_TYPE_DATA1_OFFSET, ptrValueToBigint(type.data1));
   return new Uint8Array(view.buffer);
 }
 
@@ -79,8 +76,8 @@ export function parseCXTypeFromBuffer(buffer: Uint8Array): CXType {
   return {
     kind,
     reserved,
-    data0: data0 as unknown as NativePointer,
-    data1: data1 as unknown as NativePointer,
+    data0: bigintToPtrValue(data0),
+    data1: bigintToPtrValue(data1),
   };
 }
 

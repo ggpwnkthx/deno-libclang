@@ -18,6 +18,10 @@ interface VisitContext {
   collect: boolean;
   /** Collected cursor buffers */
   buffers: Uint8Array[];
+  /** The native callback (kept alive for the duration of the visit) */
+  callback: Deno.UnsafeCallback | null;
+  /** The callback pointer (for passing to native code) */
+  callbackPointer: Deno.PointerValue | null;
 }
 
 /**
@@ -82,6 +86,28 @@ export function clearCollectedCursors(): void {
 export function shouldCollect(): boolean {
   const ctx = visitContextStack[visitContextStack.length - 1];
   return ctx?.collect ?? true;
+}
+
+/**
+ * Set the callback in the current visit context
+ */
+export function setCallback(
+  callback: Deno.UnsafeCallback,
+  callbackPointer: Deno.PointerValue,
+): void {
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  if (ctx) {
+    ctx.callback = callback;
+    ctx.callbackPointer = callbackPointer;
+  }
+}
+
+/**
+ * Get the callback pointer from the current visit context
+ */
+export function getCallbackPointer(): Deno.PointerValue | null {
+  const ctx = visitContextStack[visitContextStack.length - 1];
+  return ctx?.callbackPointer ?? null;
 }
 
 /**
