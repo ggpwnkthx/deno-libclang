@@ -2,7 +2,7 @@
   "name": "@ggpwnkthx/libclang",
   "description": "Deno FFI bindings for libclang - parse, analyze, and extract information from C/C++/Objective-C source code.",
   "exports": "./mod.ts",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "lock": false,
   "imports": {
     "@std/assert": "jsr:@std/assert@1"
@@ -12,5 +12,9 @@
   },
   "unstable": [
     "ffi"
+  ],
+  "exclude": [
+    "./.*",
+    "./tests"
   ]
 }
