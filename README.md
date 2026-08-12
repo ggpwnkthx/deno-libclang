@@ -8,9 +8,9 @@ C/C++/Objective-C source code.
 - [Deno](https://deno.land/) runtime
 - libclang v20+ installed on your system:
   - Linux: `bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"` or install LLVM
-    20
-  - macOS: `brew install llvm@20`
-  - Windows: Install LLVM 20
+    22
+  - macOS: `brew install llvm@22`
+  - Windows: Install LLVM 22
 
 ## Debugging
 
@@ -20,8 +20,67 @@ If you encounter issues, you can check the loaded libclang version:
 import { getVersion, load } from "@ggpwnkthx/libclang";
 
 load();
-console.log(getVersion()); // e.g., "LLVM version 20.0.0"
+console.log(getVersion()); // e.g., "LLVM version 22.0.0"
 ```
+
+### Resource Directory
+
+libclang needs a "resource directory" containing built-in headers (`stddef.h`,
+`stdarg.h`, `opencl-c.h`, etc.) to parse C/C++/Objective-C correctly. On most
+installs libclang locates it automatically, but on **keg-only Homebrew
+formulae** (`brew install llvm@22`) and other non-standard layouts the bundled
+heuristic can miss.
+
+This library resolves the resource directory **automatically** when `load()`
+runs and injects `-resource-dir=<path>` into every `parseTranslationUnit` call
+by default. You rarely need to think about it.
+
+Inspect what was resolved:
+
+```typescript
+import {
+  getLibraryResourceDir,
+  getResourceDir,
+  load,
+  parseTranslationUnit,
+} from "@ggpwnkthx/libclang";
+
+load();
+console.log(getLibraryResourceDir());
+// e.g., "/opt/homebrew/opt/llvm@22/lib/clang/22"
+
+const result = parseTranslationUnit(index, "main.c");
+if (result.translationUnit) {
+  console.log(getResourceDir(result.translationUnit));
+}
+```
+
+Force a specific path with the `LIBCLANG_RESOURCE_DIR` env var:
+
+```bash
+export LIBCLANG_RESOURCE_DIR=/opt/homebrew/opt/llvm@22/lib/clang/22
+```
+
+Or pass `-resource-dir` yourself in `parseTranslationUnit`'s `args`. When you
+supply it, the library does **not** auto-inject (your value wins).
+
+To opt out of auto-injection entirely:
+
+```typescript
+parseTranslationUnit(index, "main.c", [], [], {
+  disableImplicitResourceDir: true,
+});
+```
+
+Resolution order (first valid `include/stddef.h` wins):
+
+1. `LIBCLANG_RESOURCE_DIR` env var
+2. `clang -print-resource-dir` for any `clang` on `PATH`
+3. `brew --prefix llvm[@<v>]` on macOS, plus a glob of `/opt/homebrew/opt` and
+   `/usr/local/opt`
+4. Per-OS well-known paths (`/usr/lib/llvm-<V>/lib/clang/<V>/` on Linux,
+   `<ProgramFiles>\LLVM\lib\clang\<V>\` on Windows)
+5. The libclang dylib's own relative `lib/clang/<MAJOR>/`
 
 ## Usage
 

@@ -8,7 +8,7 @@ import {
   getCommonLibPaths,
   getPlatformLibName,
   pathExists,
-} from "../src/utils/platform.ts";
+} from "../utils/platform.ts";
 
 Deno.test({
   name: "platform - getPlatformLibName",

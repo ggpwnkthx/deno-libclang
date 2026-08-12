@@ -3,8 +3,8 @@
  */
 
 import { assertEquals, assertExists } from "@std/assert";
-import { NativeCXCursor } from "../src/libclang/native_cursor.ts";
-import { CX_CURSOR_SIZE } from "../src/utils/ffi.ts";
+import { NativeCXCursor } from "../libclang/native_cursor.ts";
+import { CX_CURSOR_SIZE } from "../utils/ffi.ts";
 
 Deno.test({
   name: "nativeCursor - constructor and getBuffer",

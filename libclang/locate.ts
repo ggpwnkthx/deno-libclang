@@ -91,6 +91,8 @@ const LLVM_VERSIONS: readonly string[] = [
   "18",
   "19",
   "20",
+  "21",
+  "22",
 ];
 
 /**
@@ -98,6 +100,8 @@ const LLVM_VERSIONS: readonly string[] = [
  * itself isn't installed. Newest first so we find a match quickly.
  */
 const HOMEBREW_VERSIONED_FORMULAE: readonly string[] = [
+  "22",
+  "21",
   "20",
   "19",
   "18",
@@ -118,6 +122,34 @@ function getLibclangLibName(os: Platform["os"]): string {
   if (os === "windows") return "libclang.dll";
   if (os === "darwin") return "libclang.dylib";
   return "libclang.so";
+}
+
+/**
+ * Brew `opt/` base directories to scan for installed formulae, per platform.
+ *
+ * macOS Homebrew:
+ *   - `/opt/homebrew/opt` (Apple Silicon default)
+ *   - `/usr/local/opt`    (Intel default)
+ *
+ * Linuxbrew:
+ *   - `/home/linuxbrew/.linuxbrew/opt` (multi-user install)
+ *   - `$HOMEBREW_PREFIX/opt` when set
+ *   - `$HOME/.linuxbrew/opt`            (per-user install)
+ *
+ * Filesystem-only; absence of any base directory is not an error.
+ */
+function getBrewOptBases(): string[] {
+  const out: string[] = [];
+  if (Deno.build.os === "darwin") {
+    out.push("/opt/homebrew/opt", "/usr/local/opt");
+  } else if (Deno.build.os === "linux") {
+    out.push("/home/linuxbrew/.linuxbrew/opt");
+    const homebrewPrefix = Deno.env.get("HOMEBREW_PREFIX");
+    if (homebrewPrefix) out.push(`${homebrewPrefix}/opt`);
+    const home = Deno.env.get("HOME");
+    if (home) out.push(`${home}/.linuxbrew/opt`);
+  }
+  return out;
 }
 
 /**
@@ -278,15 +310,16 @@ function resolveBrewPrefix(formula: string): string {
 }
 
 /**
- * On macOS, use `brew --prefix llvm` (and versioned variants) to find
- * the install location. Requires `--allow-run`; falls through silently
+ * On macOS or Linux, use `brew --prefix llvm` (and versioned variants) to
+ * find the install location. Requires `--allow-run`; falls through silently
  * otherwise.
  */
 function homebrewPrefixStrategy(platform: Platform): string[] {
-  if (platform.os !== "darwin") return [];
+  const os = platform.os;
+  if (os !== "darwin" && os !== "linux") return [];
   if (findOnPath("brew").length === 0) return [];
 
-  const libName = getLibclangLibName(platform.os);
+  const libName = getLibclangLibName(os);
   const out: string[] = [];
 
   const unversioned = resolveBrewPrefix("llvm");
@@ -308,20 +341,22 @@ function homebrewPrefixStrategy(platform: Platform): string[] {
 }
 
 /**
- * On macOS, scan /opt/homebrew/opt and /usr/local/opt for any installed
- * llvm / llvm@<v> formulae. Filesystem-only; no subprocess required.
+ * On macOS or Linux, scan Homebrew/Linuxbrew `opt/` directories for any
+ * installed `llvm` or `llvm@<v>` formulae. Filesystem-only; no subprocess
+ * required.
  *
  * This catches installations that `brew --prefix` cannot enumerate
- * (custom taps, Linuxbrew, or stale state), without depending on
- * `--allow-run`.
+ * (custom taps, per-user Linuxbrew installs, stale state) without depending
+ * on `--allow-run`. Bases come from {@link getBrewOptBases}.
  */
 function homebrewOptGlobStrategy(platform: Platform): string[] {
-  if (platform.os !== "darwin") return [];
+  const os = platform.os;
+  if (os !== "darwin" && os !== "linux") return [];
 
-  const libName = getLibclangLibName(platform.os);
+  const libName = getLibclangLibName(os);
   const out: string[] = [];
 
-  for (const base of ["/opt/homebrew/opt", "/usr/local/opt"]) {
+  for (const base of getBrewOptBases()) {
     if (!dirExists(base)) continue;
     for (const name of readDirNames(base)) {
       if (!/^llvm(@\d+(\.\d+)?)?$/.test(name)) continue;
@@ -337,7 +372,8 @@ function homebrewOptGlobStrategy(platform: Platform): string[] {
 
 /**
  * Linux: Debian/Ubuntu multiarch, system LLVM under /usr/lib/llvm-<V>/lib,
- * /opt manual installs, and standard lib/lib64 fallbacks.
+ * /opt manual installs, standard lib/lib64 fallbacks, and Linuxbrew
+ * (`/home/linuxbrew/.linuxbrew`, `$HOMEBREW_PREFIX`, `$HOME/.linuxbrew`).
  */
 function linuxCandidates(platform: Platform): string[] {
   const libName = getLibclangLibName(platform.os);
@@ -381,6 +417,28 @@ function linuxCandidates(platform: Platform): string[] {
     out.push(
       `/opt/llvm-${ver}/lib/${libName}`,
       `/opt/llvm-${ver}/lib/${libName}.1`,
+    );
+  }
+
+  // Linuxbrew fallbacks (multi-user and per-user). These are static
+  // paths; the dynamic `homebrewOptGlobStrategy` covers installed
+  // formula names like `llvm@20`.
+  out.push(
+    `/home/linuxbrew/.linuxbrew/lib/${libName}`,
+    `/home/linuxbrew/.linuxbrew/lib/${libName}.1`,
+  );
+  const homebrewPrefix = Deno.env.get("HOMEBREW_PREFIX");
+  if (homebrewPrefix) {
+    out.push(
+      `${homebrewPrefix}/lib/${libName}`,
+      `${homebrewPrefix}/lib/${libName}.1`,
+    );
+  }
+  const home = Deno.env.get("HOME");
+  if (home) {
+    out.push(
+      `${home}/.linuxbrew/lib/${libName}`,
+      `${home}/.linuxbrew/lib/${libName}.1`,
     );
   }
 
@@ -446,7 +504,8 @@ function strategiesForOS(platform: Platform): Strategy[] {
     () => envOverrideStrategy(platform),
     () => clangPrintFileNameStrategy(platform),
   ];
-  if (platform.os === "darwin") {
+  const os = platform.os;
+  if (os === "darwin" || os === "linux") {
     list.push(() => homebrewPrefixStrategy(platform));
     list.push(() => homebrewOptGlobStrategy(platform));
   }
@@ -462,7 +521,9 @@ let resolvedCache: { value: string | null | undefined } = { value: undefined };
  */
 export function clearLibclangCache(): void {
   resolvedCache = { value: undefined };
+  resolvedResourceDirCache = { value: undefined };
   clangStrategyCache = { tried: false, result: "" };
+  clangPrintResourceDirCache = { tried: false, result: "" };
   for (const k of Object.keys(brewFormulaPrefixCache)) {
     delete brewFormulaPrefixCache[k];
   }
@@ -517,4 +578,327 @@ export function getLibclang(): string {
     );
   }
   return libPath;
+}
+
+// ============================================================================
+// Resource directory resolution
+// ============================================================================
+
+/**
+ * Options for {@link findLocalResourceDir}.
+ */
+export interface FindResourceDirOptions {
+  /** Path to the loaded libclang; used to derive a dylib-relative fallback. */
+  libclangPath?: string;
+  /** libclang major version (e.g. 20). When omitted, derived from the file name. */
+  major?: number;
+}
+
+/**
+ * Well-known builtin-header filenames that the validator probes for.
+ *
+ * A directory is considered a valid resource directory only if at least one of
+ * these is present under `include/`. This avoids picking up unrelated
+ * directories like `/usr/lib/clang` that happen to exist on some systems.
+ */
+const RESOURCE_DIR_SENTINELS: readonly string[] = [
+  "include/stddef.h",
+  "include/stdarg.h",
+  "include/stdint.h",
+];
+
+/**
+ * Whether `dir` looks like a usable libclang resource directory.
+ *
+ * True when the directory contains at least one well-known builtin header
+ * under `include/`. False otherwise (including when the directory itself
+ * doesn't exist).
+ */
+export function isValidResourceDir(dir: string): boolean {
+  if (!dirExists(dir)) return false;
+  for (const rel of RESOURCE_DIR_SENTINELS) {
+    if (pathExists(`${dir}/${rel}`)) return true;
+  }
+  return false;
+}
+
+/**
+ * Honor the LIBCLANG_RESOURCE_DIR environment variable when set.
+ */
+function envOverrideResourceStrategy(): string[] {
+  const override = Deno.env.get("LIBCLANG_RESOURCE_DIR");
+  if (override) return [override];
+  return [];
+}
+
+let clangPrintResourceDirCache: { tried: boolean; result: string } = {
+  tried: false,
+  result: "",
+};
+
+/**
+ * Ask `clang` itself where the resource directory lives via
+ * `-print-resource-dir`. Most accurate when a usable `clang` is on PATH.
+ *
+ * Requires `--allow-run`. Without it, the strategy silently returns no
+ * candidates. Memoized for the lifetime of the process.
+ */
+function clangPrintResourceDirStrategy(_platform: Platform): string[] {
+  if (clangPrintResourceDirCache.tried) {
+    return clangPrintResourceDirCache.result
+      ? [clangPrintResourceDirCache.result]
+      : [];
+  }
+  clangPrintResourceDirCache.tried = true;
+
+  for (const clangPath of findOnPath("clang")) {
+    const stdout = safeRun(clangPath, ["-print-resource-dir"]);
+    if (stdout) {
+      const trimmed = stdout.trim();
+      if (trimmed) {
+        clangPrintResourceDirCache.result = trimmed;
+        return [trimmed];
+      }
+    }
+  }
+  return [];
+}
+
+/**
+ * On macOS or Linux, derive `<brew-prefix>/lib/clang/<MAJOR>/` from
+ * `brew --prefix`. Mirrors `homebrewPrefixStrategy` so we can use the same
+ * prefix cache.
+ */
+function homebrewResourceDirStrategy(platform: Platform): string[] {
+  const os = platform.os;
+  if (os !== "darwin" && os !== "linux") return [];
+  if (findOnPath("brew").length === 0) return [];
+
+  const out: string[] = [];
+
+  const unversioned = resolveBrewPrefix("llvm");
+  if (unversioned) {
+    for (const ver of LLVM_VERSIONS) {
+      out.push(`${unversioned}/lib/clang/${ver}`);
+    }
+  }
+
+  for (const ver of HOMEBREW_VERSIONED_FORMULAE) {
+    const prefix = resolveBrewPrefix(`llvm@${ver}`);
+    if (prefix) {
+      out.push(`${prefix}/lib/clang/${ver}`);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * On macOS or Linux, scan Homebrew/Linuxbrew `opt/` directories for any
+ * installed `llvm` or `llvm@<v>` formulae and emit
+ * `<opt>/llvm[@<v>]/lib/clang/<MAJOR>/` for each known LLVM major version.
+ * Filesystem-only.
+ */
+function homebrewOptResourceDirStrategy(platform: Platform): string[] {
+  const os = platform.os;
+  if (os !== "darwin" && os !== "linux") return [];
+
+  const out: string[] = [];
+
+  for (const base of getBrewOptBases()) {
+    if (!dirExists(base)) continue;
+    for (const name of readDirNames(base)) {
+      if (!/^llvm(@\d+(\.\d+)?)?$/.test(name)) continue;
+      for (const ver of LLVM_VERSIONS) {
+        out.push(`${base}/${name}/lib/clang/${ver}`);
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Linux: Debian/Ubuntu multiarch, system LLVM under /usr/lib/llvm-<V>/,
+ * /opt manual installs, and Linuxbrew
+ * (`/home/linuxbrew/.linuxbrew`, `$HOMEBREW_PREFIX`, `$HOME/.linuxbrew`).
+ */
+function linuxResourceDirCandidates(_platform: Platform): string[] {
+  const out: string[] = [];
+
+  for (const ver of LLVM_VERSIONS) {
+    out.push(
+      `/usr/lib/llvm-${ver}/lib/clang/${ver}`,
+      `/usr/lib/x86_64-linux-gnu/clang/${ver}`,
+      `/usr/lib/aarch64-linux-gnu/clang/${ver}`,
+      `/lib/x86_64-linux-gnu/clang/${ver}`,
+      `/lib/aarch64-linux-gnu/clang/${ver}`,
+      `/usr/local/clang/${ver}`,
+    );
+  }
+
+  out.push(`/opt/llvm/lib/clang/20`, `/usr/local/lib/clang/20`);
+  for (const ver of LLVM_VERSIONS) {
+    out.push(`/opt/llvm-${ver}/lib/clang/${ver}`);
+  }
+
+  // Linuxbrew fallbacks (multi-user and per-user). The dynamic
+  // `homebrewOptResourceDirStrategy` covers per-formula paths.
+  out.push(`/home/linuxbrew/.linuxbrew/lib/clang/20`);
+  const homebrewPrefix = Deno.env.get("HOMEBREW_PREFIX");
+  if (homebrewPrefix) {
+    out.push(`${homebrewPrefix}/lib/clang/20`);
+  }
+  const home = Deno.env.get("HOME");
+  if (home) {
+    out.push(`${home}/.linuxbrew/lib/clang/20`);
+  }
+
+  return out;
+}
+
+/**
+ * macOS: Apple Command Line Tools and Xcode bundled clang ship a resource
+ * directory too. Homebrew is handled separately.
+ */
+function darwinResourceDirCandidates(_platform: Platform): string[] {
+  const out: string[] = [];
+  for (const ver of LLVM_VERSIONS) {
+    out.push(
+      `/Library/Developer/CommandLineTools/usr/lib/clang/${ver}`,
+      `/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/clang/${ver}`,
+      `/usr/lib/clang/${ver}`,
+    );
+  }
+  return out;
+}
+
+/**
+ * Windows: libclang ships inside the LLVM install under `lib\clang\<V>`.
+ */
+function windowsResourceDirCandidates(_platform: Platform): string[] {
+  const programFiles = Deno.env.get("ProgramFiles") || "C:\\Program Files";
+  const programFilesX86 = Deno.env.get("ProgramFiles(x86)") ||
+    "C:\\Program Files (x86)";
+  const localAppData = Deno.env.get("LOCALAPPDATA") || "";
+
+  const out: string[] = [];
+  for (const base of [programFiles, programFilesX86, localAppData]) {
+    for (const ver of LLVM_VERSIONS) {
+      out.push(`${base}\\LLVM-${ver}\\lib\\clang\\${ver}`);
+    }
+    out.push(`${base}\\LLVM\\lib\\clang\\20`);
+  }
+  return out;
+}
+
+function systemResourceDirCandidatesForOS(platform: Platform): string[] {
+  switch (platform.os) {
+    case "linux":
+      return linuxResourceDirCandidates(platform);
+    case "darwin":
+      return darwinResourceDirCandidates(platform);
+    case "windows":
+      return windowsResourceDirCandidates(platform);
+  }
+}
+
+/**
+ * Derive a candidate from the loaded libclang path. The install layout puts
+ * the resource directory two levels up from the dylib in `lib/clang/<MAJOR>/`,
+ * e.g. `.../lib/libclang.dylib` ⇒ `.../lib/clang/<MAJOR>/`.
+ */
+function dylibRelativeResourceDirStrategy(
+  libclangPath: string | undefined,
+  major: number | undefined,
+): string[] {
+  if (!libclangPath || major === undefined) return [];
+  const sep = libclangPath.includes("\\") ? "\\" : "/";
+  const parent = libclangPath.substring(
+    0,
+    libclangPath.lastIndexOf(sep),
+  );
+  const grand = parent.substring(0, parent.lastIndexOf(sep));
+  return [`${grand}${sep}lib${sep}clang${sep}${major}`];
+}
+
+function resourceDirStrategiesForOS(
+  platform: Platform,
+  opts: FindResourceDirOptions,
+): Strategy[] {
+  const list: Strategy[] = [
+    () => envOverrideResourceStrategy(),
+    () => clangPrintResourceDirStrategy(platform),
+  ];
+  const os = platform.os;
+  if (os === "darwin" || os === "linux") {
+    list.push(() => homebrewResourceDirStrategy(platform));
+    list.push(() => homebrewOptResourceDirStrategy(platform));
+  }
+  list.push(() => systemResourceDirCandidatesForOS(platform));
+  list.push(() =>
+    dylibRelativeResourceDirStrategy(opts.libclangPath, opts.major)
+  );
+  return list;
+}
+
+let resolvedResourceDirCache: { value: string | null | undefined } = {
+  value: undefined,
+};
+
+/**
+ * Compute the full list of candidate paths the resource-directory locator
+ * will try, in order. Exposed for debugging and tests.
+ */
+export function findResourceDirCandidates(
+  opts: FindResourceDirOptions = {},
+): string[] {
+  const platform = getPlatform();
+  const out: string[] = [];
+  for (const strategy of resourceDirStrategiesForOS(platform, opts)) {
+    out.push(...strategy());
+  }
+  return out;
+}
+
+/**
+ * Find the locally installed libclang resource directory.
+ *
+ * Runs a sequence of strategies (LIBCLANG_RESOURCE_DIR env override,
+ * `clang -print-resource-dir`, Homebrew formulae, per-OS well-known paths,
+ * and a libclang-dylib-relative fallback) and returns the first candidate
+ * that contains a recognizable builtin header (e.g. `include/stddef.h`).
+ *
+ * Returns `null` if no candidate is valid. Cached for the lifetime of the
+ * process; use {@link clearLibclangCache} to invalidate.
+ */
+export function findLocalResourceDir(
+  opts: FindResourceDirOptions = {},
+): string | null {
+  if (resolvedResourceDirCache.value !== undefined) {
+    return resolvedResourceDirCache.value;
+  }
+  for (const path of findResourceDirCandidates(opts)) {
+    if (path && isValidResourceDir(path)) {
+      resolvedResourceDirCache.value = path;
+      return path;
+    }
+  }
+  resolvedResourceDirCache.value = null;
+  return null;
+}
+
+/**
+ * Get the resource directory path. Throws if it cannot be located.
+ */
+export function getResourceDir(): string {
+  const dir = findLocalResourceDir();
+  if (!dir) {
+    throw new Error(
+      "libclang resource directory not found. Set LIBCLANG_RESOURCE_DIR to " +
+        "the directory containing include/stddef.h (typically " +
+        "<llvm-prefix>/lib/clang/<major>/).",
+    );
+  }
+  return dir;
 }

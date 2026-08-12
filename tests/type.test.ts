@@ -469,7 +469,7 @@ Deno.test({
 Deno.test({
   name: "type - typeKindToFFI substring edge cases",
   async fn() {
-    const { typeKindToFFI } = await import("../src/libclang/type.ts");
+    const { typeKindToFFI } = await import("../libclang/type.ts");
     const { CXTypeKind } = await import("../mod.ts");
 
     // These were previously buggy - "uint16_t" was being matched as "int16"
@@ -497,7 +497,7 @@ Deno.test({
 Deno.test({
   name: "type - typeKindToFFI Long on Windows",
   async fn() {
-    const { typeKindToFFI } = await import("../src/libclang/type.ts");
+    const { typeKindToFFI } = await import("../libclang/type.ts");
     const { CXTypeKind } = await import("../mod.ts");
 
     const longResult = typeKindToFFI(CXTypeKind.Long, "");

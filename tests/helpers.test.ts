@@ -10,11 +10,8 @@ import {
   getFile,
   getLocation,
 } from "../mod.ts";
-import {
-  parseSourceLocation,
-  parseSourceRange,
-} from "../src/libclang/helpers.ts";
-import type { CXSourceRange } from "../src/ffi/types.ts";
+import { parseSourceLocation, parseSourceRange } from "../libclang/helpers.ts";
+import type { CXSourceRange } from "../ffi/types.ts";
 import { findCursorByKind, parseC } from "./test_utils.ts";
 
 // ============================================================================
@@ -191,7 +188,7 @@ Deno.test({
 Deno.test({
   name: "helpers - isCharPointerType helper",
   async fn() {
-    const { isCharPointerType } = await import("../src/libclang/type.ts");
+    const { isCharPointerType } = await import("../libclang/type.ts");
 
     assertEquals(isCharPointerType("char*"), true);
     assertEquals(isCharPointerType("const char*"), true);
@@ -212,7 +209,7 @@ Deno.test({
 Deno.test({
   name: "helpers - isVoidPointerType helper",
   async fn() {
-    const { isVoidPointerType } = await import("../src/libclang/type.ts");
+    const { isVoidPointerType } = await import("../libclang/type.ts");
 
     assertEquals(isVoidPointerType("void*"), true);
     assertEquals(isVoidPointerType("const void*"), true);
@@ -225,7 +222,7 @@ Deno.test({
 Deno.test({
   name: "helpers - getPointerDepth helper",
   async fn() {
-    const { getPointerDepth } = await import("../src/libclang/type.ts");
+    const { getPointerDepth } = await import("../libclang/type.ts");
 
     assertEquals(getPointerDepth("char"), 0);
     assertEquals(getPointerDepth("char*"), 1);

@@ -8,7 +8,9 @@ import {
   type CXCursor,
   type CXTranslationUnit,
   type CXType,
+  getCursorArgument,
   getCursorLocation,
+  getCursorNumArguments,
   getCursorSpelling,
   getCursorType,
   getCursorUSR,
@@ -760,6 +762,34 @@ export function collectDeclarations(
             const paramName = getCursorSpelling(paramCursor) ||
               `arg${parameters.length}`;
             const paramType = getCursorType(paramCursor);
+            const paramFFI = lowerTypeToFFI(
+              paramType,
+              options,
+              data.structs,
+              0,
+              paramName,
+            );
+            parameters.push({ name: paramName, type: paramFFI });
+          }
+        }
+
+        // Fallback: if visitChildren yielded zero ParmDecl entries but the
+        // function type reports arity > 0, recover via direct cursor
+        // argument enumeration. This covers the failure mode where the
+        // parent cursor's data slot is mis-marshalled by upstream FFI (e.g.
+        // a `_Bool` return-type cursor that libclang reports as `int`).
+        if (parameters.length === 0 && _numArgs > 0) {
+          let directNumArgs = 0;
+          try {
+            directNumArgs = getCursorNumArguments(childCursor);
+          } catch {
+            directNumArgs = 0;
+          }
+          for (let i = 0; i < directNumArgs; i++) {
+            const argCursor = getCursorArgument(childCursor, i);
+            const paramName = getCursorSpelling(argCursor) ||
+              `arg${parameters.length}`;
+            const paramType = getCursorType(argCursor);
             const paramFFI = lowerTypeToFFI(
               paramType,
               options,

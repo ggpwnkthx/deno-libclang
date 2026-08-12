@@ -364,3 +364,35 @@ export function getCursorUSR(cursor: CXCursor | Uint8Array): string {
   const cxString = sym.clang_getCursorUSR(toNativeCursor(cursor));
   return cxStringToString(cxString);
 }
+
+/**
+ * Get the number of arguments to a function-like cursor.
+ *
+ * Direct path around `clang_visitChildren` when it fails to surface
+ * `ParmDecl` cursors (e.g. some libclang versions / FFI marshalling paths
+ * for builtin-typed return cursors). Pairs with `getCursorArgument`.
+ *
+ * @param cursor - Cursor of a `FunctionDecl`, `CXXMethod`, etc.
+ * @returns Number of arguments, or -1 if the cursor is not callable.
+ */
+export function getCursorNumArguments(cursor: CXCursor | Uint8Array): number {
+  const sym = getSymbols();
+  return sym.clang_Cursor_getNumArguments(toNativeCursor(cursor));
+}
+
+/**
+ * Get the `ParmDecl` cursor for an argument index.
+ *
+ * Direct path around `clang_visitChildren` for callable cursors.
+ *
+ * @param cursor - Cursor of a `FunctionDecl`, `CXXMethod`, etc.
+ * @param argIndex - 0-based argument index
+ * @returns The `ParmDecl` cursor
+ */
+export function getCursorArgument(
+  cursor: CXCursor | Uint8Array,
+  argIndex: number,
+): CXCursor {
+  const sym = getSymbols();
+  return sym.clang_Cursor_getArgument(toNativeCursor(cursor), argIndex);
+}

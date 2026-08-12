@@ -22,8 +22,8 @@ import {
   visitChildren,
 } from "../mod.ts";
 import { CXChildVisitResult, CXCursorKind } from "../mod.ts";
-import type { CXCursor } from "../src/ffi/types.ts";
-import { CX_CURSOR_SIZE } from "../src/utils/ffi.ts";
+import type { CXCursor } from "../ffi/types.ts";
+import { CX_CURSOR_SIZE } from "../utils/ffi.ts";
 
 /**
  * Assert that a string contains a substring
@@ -207,6 +207,59 @@ export async function parseC(
     disposeIndex(index);
     await Deno.remove(file);
     loadMutex.release();
+  };
+
+  return {
+    index,
+    tu: result.translationUnit,
+    tuCursor,
+    file,
+    cleanup,
+  };
+}
+
+/**
+ * Parse an existing C/C++ source file on disk and return resources with
+ * automatic cleanup. The file is not modified and is not removed by the
+ * returned cleanup function.
+ *
+ * @param relPath - Path to the source file (relative to the project root or absolute)
+ * @param opts - Optional parse options (clang args, unsaved files)
+ * @returns Object with index, tu, tuCursor, file, and cleanup function
+ */
+export async function parseCFile(
+  relPath: string,
+  opts?: {
+    args?: string[];
+    unsaved?: Array<{ filename: string; contents: string; length: number }>;
+  },
+): Promise<{
+  index: ReturnType<typeof createIndex>;
+  tu: NonNullable<ReturnType<typeof parseTranslationUnit>["translationUnit"]>;
+  tuCursor: ReturnType<typeof getTranslationUnitCursor>;
+  file: string;
+  cleanup: () => Promise<void>;
+}> {
+  await loadMutex.acquire();
+
+  const index = createIndex();
+  const file = relPath.startsWith("/") ? relPath : `${Deno.cwd()}/${relPath}`;
+
+  const result = parseTranslationUnit(
+    index,
+    file,
+    opts?.args ?? [],
+    opts?.unsaved ?? [],
+  );
+  assertExists(result.translationUnit);
+
+  const tuCursor = getTranslationUnitCursor(result.translationUnit);
+
+  const cleanup = () => {
+    disposeTranslationUnit(result.translationUnit);
+    disposeIndex(index);
+    loadMutex.release();
+    return Promise.resolve();
   };
 
   return {

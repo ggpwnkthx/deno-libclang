@@ -2,7 +2,7 @@
  * Library loading and management
  */
 
-import { getLibclang } from "./locate.ts";
+import { findLocalResourceDir, getLibclang } from "./locate.ts";
 import { getLibclangSymbols } from "../ffi/symbols.ts";
 import type { LibclangSymbols } from "../ffi/types.ts";
 
@@ -15,7 +15,7 @@ const MIN_VERSION = 20;
  * Maximum supported libclang major version
  * Used to detect when a newer (potentially incompatible) version is being used
  */
-const MAX_VERSION = 21;
+const MAX_VERSION = 22;
 
 /**
  * Libclang library manager class
@@ -27,6 +27,9 @@ class LibclangLibrary {
   private libclang: unknown = null;
   private symbols: LibclangSymbols | null = null;
   private cachedSymbols: LibclangSymbols | null = null;
+  private libclangPath: string | null = null;
+  private majorVersion: number | null = null;
+  private resourceDir: string | null | undefined = undefined;
 
   /**
    * Check if libclang is currently loaded
@@ -61,9 +64,10 @@ class LibclangLibrary {
   /**
    * Check that the loaded libclang version is at least v20
    *
+   * @returns The parsed libclang major version
    * @throws Error if libclang version is less than 20
    */
-  private checkVersion(): void {
+  private checkVersion(): number {
     const version = this.getVersion();
 
     // Parse version from string like "LLVM version 20.0.0" or "clang version 20.0.0"
@@ -90,6 +94,40 @@ class LibclangLibrary {
           `Some features may not work correctly.`,
       );
     }
+
+    return majorVersion;
+  }
+
+  /**
+   * Get the resolved libclang resource directory, if any.
+   *
+   * Returns the path passed to `parseTranslationUnit` via `-resource-dir`
+   * (or `null` when resolution failed). Useful for debugging and for callers
+   * that want to introspect what the library resolved.
+   *
+   * Resolution is lazy and cached for the lifetime of the loaded library: it
+   * runs on the first call (or first {@link parseTranslationUnit} that needs
+   * to auto-inject `-resource-dir`) and is skipped entirely when no caller
+   * ever asks. This keeps {@link load} (and tests that only load without
+   * parsing) fast at the cost of paying the resolution on first use.
+   *
+   * The hot path is inlined here so `parseTranslationUnit` pays only a
+   * single property read + undefined check once the cache is warm.
+   *
+   * @throws Error if libclang has not been loaded yet
+   */
+  getLibraryResourceDir(): string | null {
+    if (this.symbols === null) {
+      throw new Error("libclang not loaded. Call load() first.");
+    }
+    const cached = this.resourceDir;
+    if (cached !== undefined) return cached;
+    const resolved = findLocalResourceDir({
+      libclangPath: this.libclangPath ?? undefined,
+      major: this.majorVersion ?? undefined,
+    });
+    this.resourceDir = resolved;
+    return resolved;
   }
 
   /**
@@ -105,10 +143,11 @@ class LibclangLibrary {
       this.libclang = Deno.dlopen(actualPath, getLibclangSymbols());
       // @ts-ignore - symbols access - use any to bypass strict type checking for FFI
       this.symbols = this.libclang.symbols as unknown as LibclangSymbols;
+      this.libclangPath = actualPath;
 
       // Check version after loading - unload if version check fails
       try {
-        this.checkVersion();
+        this.majorVersion = this.checkVersion();
       } catch (versionError) {
         // Close the library and clear symbols
         if (this.libclang !== null) {
@@ -116,6 +155,8 @@ class LibclangLibrary {
           this.libclang.close();
           this.libclang = null;
           this.symbols = null;
+          this.libclangPath = null;
+          this.majorVersion = null;
         }
         // Re-throw with context
         const originalError = versionError instanceof Error
@@ -151,6 +192,9 @@ class LibclangLibrary {
       this.libclang = null;
       this.symbols = null;
       this.cachedSymbols = null;
+      this.libclangPath = null;
+      this.majorVersion = null;
+      this.resourceDir = undefined;
     }
     return true;
   }
@@ -272,4 +316,18 @@ export function getSymbolsCached(): LibclangSymbols {
  */
 export function load(libPath?: string): void {
   library.load(libPath);
+}
+
+/**
+ * Get the resolved libclang resource directory (e.g. `<prefix>/lib/clang/20/`).
+ *
+ * Resolved lazily on first call (and reused by `parseTranslationUnit`'s
+ * auto-injection), so callers that never query it pay no cost at
+ * {@link load} time. Returns `null` when no valid candidate could be
+ * located.
+ *
+ * @throws Error if libclang has not been loaded yet
+ */
+export function getLibraryResourceDir(): string | null {
+  return library.getLibraryResourceDir();
 }

@@ -14,9 +14,9 @@ import {
   getLocation,
   visitChildren,
 } from "../mod.ts";
-import type { CXFile } from "../src/ffi/types.ts";
+import type { CXFile } from "../ffi/types.ts";
 import { parseC } from "./test_utils.ts";
-import { CX_CURSOR_SIZE } from "../src/utils/ffi.ts";
+import { CX_CURSOR_SIZE } from "../utils/ffi.ts";
 
 Deno.test({
   name: "file - get file from translation unit",

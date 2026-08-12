@@ -14,7 +14,7 @@ import {
   CX_TYPE_SIZE,
   POINTER_SIZE,
   ULONG_SIZE,
-} from "../src/utils/ffi.ts";
+} from "../utils/ffi.ts";
 import {
   createIndex,
   CXChildVisitResult,

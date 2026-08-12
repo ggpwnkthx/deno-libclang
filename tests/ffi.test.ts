@@ -10,7 +10,7 @@ import {
   POINTER_SIZE,
   ptrToCString,
   setPointer,
-} from "../src/utils/ffi.ts";
+} from "../utils/ffi.ts";
 
 Deno.test({
   name: "ffi - createPointerBuffer",

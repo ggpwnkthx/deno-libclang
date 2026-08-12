@@ -7,7 +7,13 @@
 // Re-export from submodules for backward compatibility
 
 // Library management
-export { getVersion, isLoaded, load, unload } from "./libclang/library.ts";
+export {
+  getLibraryResourceDir,
+  getVersion,
+  isLoaded,
+  load,
+  unload,
+} from "./libclang/library.ts";
 
 // Index functions
 export { createIndex, disposeIndex } from "./libclang/index.ts";
@@ -15,13 +21,22 @@ export { createIndex, disposeIndex } from "./libclang/index.ts";
 // Translation Unit functions
 export {
   disposeTranslationUnit,
+  getResourceDir,
   getTranslationUnitCursor,
   parseTranslationUnit,
   reparseTranslationUnit,
 } from "./libclang/translation_unit.ts";
 
+// Locator helpers
+export {
+  findLocalResourceDir,
+  findResourceDirCandidates,
+  isValidResourceDir,
+} from "./libclang/locate.ts";
+
 // Cursor functions
 export {
+  getCursorArgument,
   getCursorAvailability,
   getCursorDefinition,
   getCursorDisplayName,
@@ -29,6 +44,7 @@ export {
   getCursorKind,
   getCursorKindSpelling,
   getCursorLocation,
+  getCursorNumArguments,
   getCursorReferenced,
   getCursorSpelling,
   getCursorSpellingFromBuffer,
@@ -113,4 +129,6 @@ export type {
  * Many functions in this library accept either a CXCursor or a Uint8Array buffer
  * to provide flexibility when working with cursors from different sources.
  */
-export type CXCursorOrBuffer = import("./ffi/types.ts").CXCursor | Uint8Array;
+export type CXCursorOrBuffer =
+  | import("./ffi/types.ts").CXCursor
+  | Uint8Array;

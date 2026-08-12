@@ -587,6 +587,11 @@ export interface LibclangSymbols {
   // Function argument types
   clang_getNumArgTypes: (type: CXType) => number;
   clang_getArgType: (type: CXType, argIndex: number) => CXType;
+  // Direct cursor argument enumeration - bypass for visitChildren when it
+  // yields zero ParmDecl cursors (e.g. when a builtin-typed return cursor is
+  // mis-handled by an upstream FFI binding).
+  clang_Cursor_getNumArguments: (cursor: CXCursor) => number;
+  clang_Cursor_getArgument: (cursor: CXCursor, argIndex: number) => CXCursor;
 
   // Diagnostic functions
   clang_getNumDiagnostics: (unit: CXTranslationUnit) => number;
@@ -667,4 +672,10 @@ export interface LibclangSymbols {
 
   // Version information
   clang_getClangVersion: () => CXString;
+
+  // Resource directory
+  // Returns the resource directory path (CXString, free with clang_disposeString).
+  // Was historically available from libclang v8+; removed in some v21+ builds.
+  // Optional because not all libclang versions export it.
+  clang_getResourceDirName?: (unit: CXTranslationUnit) => CXString;
 }

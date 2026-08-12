@@ -4,13 +4,14 @@
 
 import {
   type CXIndex,
+  type CXString,
   type CXTranslationUnit,
   CXTranslationUnit_Flags,
   type CXUnsavedFile,
   type NativePointer,
   type ParseResult,
 } from "../ffi/types.ts";
-import { getSymbols } from "./library.ts";
+import { getLibraryResourceDir, getSymbols } from "./library.ts";
 import { POINTER_SIZE, ULONG_SIZE, writePtr } from "../utils/ffi.ts";
 
 /**
@@ -152,12 +153,41 @@ function unsavedFilesToNativePointer(
 }
 
 /**
+ * Options accepted by {@link parseTranslationUnit}.
+ */
+export interface ParseTranslationUnitOptions {
+  /**
+   * If `true`, do not auto-inject `-resource-dir` even when the library has
+   * resolved one. Useful when the user wants to rely on libclang's own
+   * bundled resource directory (rare) or has already injected an explicit
+   * `-resource-dir` via `args`.
+   *
+   * Defaults to `false`: `-resource-dir` is auto-injected when the user
+   * hasn't already provided one and the library resolved a directory.
+   */
+  disableImplicitResourceDir?: boolean;
+}
+
+/**
+ * Returns `true` if `args` already contains a `-resource-dir` flag in either
+ * form. Used to skip auto-injection when the caller supplied their own.
+ */
+function argsHaveResourceDir(args: readonly string[]): boolean {
+  for (const a of args) {
+    if (a === "-resource-dir") return true;
+    if (a.startsWith("-resource-dir=")) return true;
+  }
+  return false;
+}
+
+/**
  * Parse a translation unit from source code
  *
  * @param index - The CXIndex to use for parsing
  * @param sourceFile - Path to the source file to parse
  * @param args - Optional additional command-line arguments for the compiler
  * @param unsavedFiles - Optional files that haven't been saved to disk
+ * @param options - Optional parser options (e.g. disable `-resource-dir` auto-injection)
  * @returns ParseResult containing the translation unit or error
  */
 export function parseTranslationUnit(
@@ -165,6 +195,7 @@ export function parseTranslationUnit(
   sourceFile: string,
   args: string[] = [],
   unsavedFiles: CXUnsavedFile[] = [],
+  options: ParseTranslationUnitOptions = {},
 ): ParseResult {
   // Validate inputs
   if (!index) {
@@ -181,6 +212,20 @@ export function parseTranslationUnit(
     };
   }
 
+  // Auto-inject `-resource-dir` so libclang can find builtin headers
+  // (e.g. on keg-only Homebrew installs where its own heuristic misses).
+  // Prepended (not appended) so user-supplied `-resource-dir` always wins.
+  let effectiveArgs = args;
+  if (
+    !options.disableImplicitResourceDir &&
+    !argsHaveResourceDir(args)
+  ) {
+    const rd = getLibraryResourceDir();
+    if (rd) {
+      effectiveArgs = ["-resource-dir", rd, ...args];
+    }
+  }
+
   const sym = getSymbols();
 
   // Convert sourceFile to a C-string pointer using native memory
@@ -188,7 +233,7 @@ export function parseTranslationUnit(
   const sourceFilePtr = Deno.UnsafePointer.of(sourceFileBuffer);
 
   // Convert args to native pointer array
-  const argsResult = argsToNativePointer(args);
+  const argsResult = argsToNativePointer(effectiveArgs);
 
   // Convert unsaved files to native pointer
   const unsavedFilesResult = unsavedFilesToNativePointer(unsavedFiles);
@@ -201,8 +246,10 @@ export function parseTranslationUnit(
   const result = sym.clang_parseTranslationUnit(
     index,
     sourceFilePtr as unknown as NativePointer,
-    args.length > 0 ? argsResult.ptr as unknown as NativePointer : null,
-    args.length,
+    effectiveArgs.length > 0
+      ? argsResult.ptr as unknown as NativePointer
+      : null,
+    effectiveArgs.length,
     unsavedPtr,
     unsavedFiles.length,
     CXTranslationUnit_Flags.None,
@@ -278,4 +325,47 @@ export function getTranslationUnitCursor(
 } {
   const sym = getSymbols();
   return sym.clang_getTranslationUnitCursor(unit);
+}
+/**
+ * Extract the underlying C string from a CXString and dispose it.
+ */
+function cxStringToString(cx: CXString): string {
+  const sym = getSymbols();
+  const cStr = sym.clang_getCString(cx);
+  const result = cStr === null ? "" : Deno.UnsafePointerView.getCString(cStr);
+  sym.clang_disposeString(cx);
+  return result;
+}
+
+/**
+ * Get the resource directory path that libclang is actually using for this
+ * translation unit.
+ *
+ * Calls `clang_getResourceDirName` on the TU and returns the resulting
+ * directory. Useful as a diagnostic when parsing fails to find builtin
+ * headers (`stddef.h`, etc.) — the returned path is what libclang looked
+ * at, regardless of whether the library auto-injected `-resource-dir`.
+ *
+ * Returns the empty string when the loaded libclang does not export
+ * `clang_getResourceDirName` (e.g. some libclang 21+ builds have removed
+ * it). When that happens, prefer {@link getLibraryResourceDir} for the
+ * path this library resolved.
+ *
+ * @param unit - The translation unit to query
+ * @returns The resource directory path (possibly empty string)
+ */
+export function getResourceDir(unit: CXTranslationUnit): string {
+  const sym = getSymbols();
+  const fn = sym.clang_getResourceDirName;
+  if (fn === null || fn === undefined) {
+    return "";
+  }
+  try {
+    const cxString = fn(unit);
+    return cxStringToString(cxString);
+  } catch {
+    // Deno returns a stub for missing optional symbols that throws "call
+    // is not a function" when invoked. Fall through to the empty string.
+    return "";
+  }
 }

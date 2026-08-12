@@ -6,10 +6,13 @@ import { assertEquals, assertExists, assertStringIncludes } from "@std/assert";
 import {
   clearLibclangCache,
   findLocalLibclang,
+  findLocalResourceDir,
+  findResourceDirCandidates,
   getLibclang,
   getLibclangCandidates,
   getPlatform,
-} from "../src/libclang/locate.ts";
+  isValidResourceDir,
+} from "../libclang/locate.ts";
 
 Deno.test({
   name: "locate - getPlatform",
@@ -219,6 +222,288 @@ Deno.test({
       Deno.env.delete("LIBCLANG_LIBRARY_PATH");
       clearLibclangCache();
       Deno.removeSync(tmp);
+    }
+  },
+});
+
+// ============================================================================
+// Resource directory tests
+// ============================================================================
+
+Deno.test({
+  name: "locate - findResourceDirCandidates returns non-empty array",
+  fn() {
+    const candidates = findResourceDirCandidates();
+    assertExists(candidates);
+    assertEquals(Array.isArray(candidates), true);
+    assertEquals(candidates.length > 0, true);
+  },
+});
+
+Deno.test({
+  name: "locate - LIBCLANG_RESOURCE_DIR wins when valid",
+  fn() {
+    // Build a fake resource dir with a recognized sentinel header.
+    const dir = Deno.makeTempDirSync({ prefix: "fake-resource-dir-" });
+    const includeDir = `${dir}/include`;
+    Deno.mkdirSync(includeDir);
+    Deno.writeTextFileSync(`${includeDir}/stddef.h`, "");
+
+    Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+    clearLibclangCache();
+    try {
+      Deno.env.set("LIBCLANG_RESOURCE_DIR", dir);
+      clearLibclangCache();
+      assertEquals(findLocalResourceDir(), dir);
+    } finally {
+      Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+      clearLibclangCache();
+      Deno.removeSync(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - LIBCLANG_RESOURCE_DIR without include/ falls through",
+  fn() {
+    // Directory exists but has no include/stddef.h — should not be returned.
+    const dir = Deno.makeTempDirSync({ prefix: "fake-empty-resource-" });
+    Deno.writeTextFileSync(`${dir}/unrelated.txt`, "");
+
+    Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+    clearLibclangCache();
+    try {
+      Deno.env.set("LIBCLANG_RESOURCE_DIR", dir);
+      clearLibclangCache();
+      const result = findLocalResourceDir();
+      // Must not return the invalid directory.
+      assertEquals(result === dir, false);
+    } finally {
+      Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+      clearLibclangCache();
+      Deno.removeSync(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - LIBCLANG_RESOURCE_DIR nonexistent dir falls through",
+  fn() {
+    Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+    clearLibclangCache();
+    try {
+      Deno.env.set(
+        "LIBCLANG_RESOURCE_DIR",
+        "/__definitely_nonexistent_resource_dir__",
+      );
+      clearLibclangCache();
+      const result = findLocalResourceDir();
+      if (result !== null) {
+        assertEquals(
+          result !== "/__definitely_nonexistent_resource_dir__",
+          true,
+        );
+      }
+    } finally {
+      Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+      clearLibclangCache();
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - env override appears first in candidates list",
+  fn() {
+    Deno.env.set("LIBCLANG_RESOURCE_DIR", "/custom/resource-dir");
+    clearLibclangCache();
+    try {
+      const candidates = findResourceDirCandidates();
+      assertEquals(candidates[0], "/custom/resource-dir");
+    } finally {
+      Deno.env.delete("LIBCLANG_RESOURCE_DIR");
+      clearLibclangCache();
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - isValidResourceDir accepts real layout",
+  fn() {
+    const dir = Deno.makeTempDirSync({ prefix: "valid-rd-" });
+    const includeDir = `${dir}/include`;
+    Deno.mkdirSync(includeDir);
+    Deno.writeTextFileSync(`${includeDir}/stdarg.h`, "");
+    try {
+      assertEquals(isValidResourceDir(dir), true);
+    } finally {
+      Deno.removeSync(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - isValidResourceDir rejects bare directories",
+  fn() {
+    const dir = Deno.makeTempDirSync({ prefix: "invalid-rd-" });
+    try {
+      assertEquals(isValidResourceDir(dir), false);
+    } finally {
+      Deno.removeSync(dir, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - findResourceDirCandidates includes per-OS well-known paths",
+  fn() {
+    const platform = getPlatform();
+    const candidates = findResourceDirCandidates();
+    assertEquals(candidates.length > 0, true);
+    if (platform.os === "linux") {
+      // Spot-check a few Linux paths.
+      const joined = candidates.join("\n");
+      assertEquals(joined.includes("/usr/lib/llvm-"), true);
+    } else if (platform.os === "darwin") {
+      const joined = candidates.join("\n");
+      // Homebrew opt glob strategy should emit at least one candidate.
+      assertEquals(joined.includes("/opt/homebrew/opt/"), true);
+    }
+  },
+});
+
+// ============================================================================
+// Linuxbrew tests (filesystem-only; no `--allow-run` needed)
+// ============================================================================
+
+Deno.test({
+  name: "locate - getLibclangCandidates includes Linuxbrew per-user paths",
+  fn() {
+    if (Deno.build.os !== "linux") return;
+
+    const candidates = getLibclangCandidates();
+    const joined = candidates.join("\n");
+
+    // Per-user static path under $HOME (emitted by linuxCandidates).
+    const home = Deno.env.get("HOME");
+    if (home) {
+      assertEquals(
+        joined.includes(`${home}/.linuxbrew/lib/libclang.so`),
+        true,
+      );
+      assertEquals(
+        joined.includes(`${home}/.linuxbrew/lib/libclang.so.1`),
+        true,
+      );
+    }
+
+    // Multi-user static path is always present on linux.
+    assertEquals(
+      joined.includes("/home/linuxbrew/.linuxbrew/lib/libclang.so"),
+      true,
+    );
+    assertEquals(
+      joined.includes("/home/linuxbrew/.linuxbrew/lib/libclang.so.1"),
+      true,
+    );
+  },
+});
+
+Deno.test({
+  name:
+    "locate - getLibclangCandidates includes Linuxbrew HOMEBREW_PREFIX paths",
+  fn() {
+    if (Deno.build.os !== "linux") return;
+
+    const fakePrefix = Deno.makeTempDirSync({
+      prefix: "fake-linuxbrew-prefix-",
+    });
+
+    const savedPrefix = Deno.env.get("HOMEBREW_PREFIX");
+    Deno.env.set("HOMEBREW_PREFIX", fakePrefix);
+    clearLibclangCache();
+    try {
+      const candidates = getLibclangCandidates();
+      const joined = candidates.join("\n");
+      assertEquals(joined.includes(`${fakePrefix}/lib/libclang.so`), true);
+      assertEquals(joined.includes(`${fakePrefix}/lib/libclang.so.1`), true);
+    } finally {
+      if (savedPrefix !== undefined) {
+        Deno.env.set("HOMEBREW_PREFIX", savedPrefix);
+      } else {
+        Deno.env.delete("HOMEBREW_PREFIX");
+      }
+      clearLibclangCache();
+      Deno.removeSync(fakePrefix, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name: "locate - findResourceDirCandidates includes Linuxbrew bases on linux",
+  fn() {
+    if (Deno.build.os !== "linux") return;
+
+    const fakeHome = Deno.makeTempDirSync({ prefix: "fake-linuxbrew-rd-" });
+    const savedHome = Deno.env.get("HOME");
+    Deno.env.set("HOME", fakeHome);
+    clearLibclangCache();
+    try {
+      const candidates = findResourceDirCandidates();
+      const joined = candidates.join("\n");
+      // Static Linuxbrew per-user base (linuxResourceDirCandidates fallback).
+      assertEquals(
+        joined.includes(`${fakeHome}/.linuxbrew/lib/clang/`),
+        true,
+      );
+      // Static Linuxbrew multi-user base is always present on linux.
+      assertEquals(
+        joined.includes(`/home/linuxbrew/.linuxbrew/lib/clang/`),
+        true,
+      );
+    } finally {
+      if (savedHome !== undefined) {
+        Deno.env.set("HOME", savedHome);
+      } else {
+        Deno.env.delete("HOME");
+      }
+      clearLibclangCache();
+      Deno.removeSync(fakeHome, { recursive: true });
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "locate - homebrewOptGlobStrategy finds llvm dir under per-user Linuxbrew opt",
+  fn() {
+    if (Deno.build.os !== "linux") return;
+
+    // Create a $HOME/.linuxbrew/opt/llvm dir so homebrewOptGlobStrategy's
+    // dirExists + readDirNames pass picks it up.
+    const fakeHome = Deno.makeTempDirSync({ prefix: "fake-linuxbrew-glob-" });
+    const optDir = `${fakeHome}/.linuxbrew/opt`;
+    const formulaDir = `${optDir}/llvm`;
+    Deno.mkdirSync(`${formulaDir}/lib`, { recursive: true });
+
+    const savedHome = Deno.env.get("HOME");
+    Deno.env.set("HOME", fakeHome);
+    clearLibclangCache();
+    try {
+      const candidates = findResourceDirCandidates();
+      const joined = candidates.join("\n");
+      // Per-formula dynamic glob candidates.
+      assertEquals(
+        joined.includes(`${optDir}/llvm/lib/clang/`),
+        true,
+      );
+    } finally {
+      if (savedHome !== undefined) {
+        Deno.env.set("HOME", savedHome);
+      } else {
+        Deno.env.delete("HOME");
+      }
+      clearLibclangCache();
+      Deno.removeSync(fakeHome, { recursive: true });
     }
   },
 });

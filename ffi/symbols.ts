@@ -122,6 +122,18 @@ export function getLibclangSymbols(): LibclangSymbols {
       }, "i32"],
       result: { struct: ["u32", "u32", "pointer", "pointer"] },
     } as unknown as LibclangSymbols["clang_getArgType"],
+    // clang_Cursor_getNumArguments: int clang_Cursor_getNumArguments(CXCursor C);
+    clang_Cursor_getNumArguments: {
+      parameters: [{ struct: ["u32", "i32", "pointer", "pointer", "pointer"] }],
+      result: "i32",
+    } as unknown as LibclangSymbols["clang_Cursor_getNumArguments"],
+    // clang_Cursor_getArgument: CXCursor clang_Cursor_getArgument(CXCursor C, unsigned i);
+    clang_Cursor_getArgument: {
+      parameters: [{
+        struct: ["u32", "i32", "pointer", "pointer", "pointer"],
+      }, "u32"],
+      result: { struct: ["u32", "i32", "pointer", "pointer", "pointer"] },
+    } as unknown as LibclangSymbols["clang_Cursor_getArgument"],
 
     // Diagnostic functions
     clang_getNumDiagnostics: {
@@ -297,5 +309,15 @@ export function getLibclangSymbols(): LibclangSymbols {
       parameters: [],
       result: { struct: ["pointer", "u32"] },
     } as unknown as LibclangSymbols["clang_getClangVersion"],
+
+    // Resource directory
+    clang_getResourceDirName: {
+      parameters: ["pointer"], // CXTranslationUnit
+      result: { struct: ["pointer", "u32"] }, // CXString
+      // Marked optional: this symbol was removed in some libclang 21+
+      // builds. Deno's dlopen will set the symbol to `null` when missing
+      // instead of failing the entire library load.
+      optional: true,
+    } as unknown as LibclangSymbols["clang_getResourceDirName"],
   };
 }
